@@ -17,8 +17,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import base64
 
-# Add LeRobot to path
-sys.path.append("/home/cagatay/Isaac-GR00T/lerobot/src")
 
 try:
     import cv2
