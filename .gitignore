@@ -1,0 +1,6 @@
+__pycache__
+outputs
+camera_samples
+*.bak
+*.pkl
+*.egg-info

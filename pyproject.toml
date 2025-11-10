@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "strands-robots"
+version = "0.1.0"
+description = "Robot Control with LeRobot Integration for Strands Agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Cagatay Cali", email = "cagataycali@icloud.com"},
+]
+keywords = ["robots", "agents", "lerobot", "strands", "sdk"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "strands-agents>=0.1.0",
+    "lerobot>=0.3.0",
+    "numpy>=1.21.0",
+    "torch>=2.0.0",
+    "opencv-python>=4.5.0",
+    "Pillow>=8.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov",
+    "black",
+    "isort",
+    "flake8",
+    "mypy",
+]
+
+[project.urls]
+Homepage = "https://github.com/cagataycali/strands-robots"
+Documentation = "https://github.com/cagataycali/strands-robots#readme"
+Repository = "https://github.com/cagataycali/strands-robots.git"
+Issues = "https://github.com/cagataycali/strands-robots/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["strands_robots*"]
+
+[tool.black]
+line-length = 120
+target-version = ['py310']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 120
+multi_line_output = 3
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --cov=strands_robots --cov-report=term-missing"
