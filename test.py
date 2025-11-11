@@ -4,13 +4,13 @@ from strands_robots import Robot
 
 robot = Robot(
     tool_name="orange_arm",
-    robot="so101_follower", 
+    robot="so101_follower",
     cameras={
         "wrist": {"type": "opencv", "index_or_path": "/dev/video0", "fps": 30},
-        "front": {"type": "opencv", "index_or_path": "/dev/video2", "fps": 30}
+        "front": {"type": "opencv", "index_or_path": "/dev/video2", "fps": 30},
     },
     port="/dev/ttyACM0",
-    data_config="so100_dualcam"
+    data_config="so100_dualcam",
 )
 
 agent = Agent(tools=[robot], load_tools_from_directory=True)
@@ -20,7 +20,7 @@ agent.tool.gr00t_inference(
     action="start",
     checkpoint_path="/data/checkpoints/gr00t-wave/checkpoint-300000",
     port=8000,
-    data_config="so100_dualcam"
+    data_config="so100_dualcam",
 )
 print("✅ GR00T service ready!")
 

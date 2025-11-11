@@ -27,8 +27,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "strands-agents>=0.1.0",
-    "lerobot>=0.3.0",
+    "strands-agents",
+    "lerobot",
     "numpy>=1.21.0",
     "torch>=2.0.0",
     "opencv-python>=4.5.0",

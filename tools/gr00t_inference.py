@@ -13,6 +13,7 @@ import json
 from typing import Dict, Any
 from strands import tool
 
+
 @tool
 def gr00t_inference(
     action: str,
@@ -24,7 +25,7 @@ def gr00t_inference(
     denoising_steps: int = 4,
     host: str = "0.0.0.0",
     container_name: str = None,
-    timeout: int = 60
+    timeout: int = 60,
 ) -> Dict[str, Any]:
     """
     Manage GR00T inference services in Docker containers using Isaac-GR00T native scripts.
@@ -50,7 +51,7 @@ def gr00t_inference(
     Returns:
         Dict with status and information about the operation
     """
-    
+
     if action == "find_containers":
         return _find_gr00t_containers()
     elif action == "list":
@@ -69,8 +70,15 @@ def gr00t_inference(
         if port is None:
             return {"status": "error", "message": "Port required to start service"}
         return _start_service(
-            checkpoint_path, port, data_config, embodiment_tag, 
-            denoising_steps, host, container_name, policy_name, timeout
+            checkpoint_path,
+            port,
+            data_config,
+            embodiment_tag,
+            denoising_steps,
+            host,
+            container_name,
+            policy_name,
+            timeout,
         )
     elif action == "restart":
         if checkpoint_path is None or port is None:
@@ -79,8 +87,15 @@ def gr00t_inference(
         _stop_service(port)
         time.sleep(2)  # Brief pause
         return _start_service(
-            checkpoint_path, port, data_config, embodiment_tag,
-            denoising_steps, host, container_name, policy_name, timeout
+            checkpoint_path,
+            port,
+            data_config,
+            embodiment_tag,
+            denoising_steps,
+            host,
+            container_name,
+            policy_name,
+            timeout,
         )
     else:
         return {"status": "error", "message": f"Unknown action: {action}"}
@@ -89,26 +104,21 @@ def gr00t_inference(
 def _find_gr00t_containers() -> Dict[str, Any]:
     """Find available isaac-gr00t containers."""
     try:
-        result = subprocess.run([
-            "docker", "ps", "-a", "--format", "{{.Names}}\\t{{.Status}}\\t{{.Ports}}"
-        ], capture_output=True, text=True, check=True)
-        
+        result = subprocess.run(
+            ["docker", "ps", "-a", "--format", "{{.Names}}\\t{{.Status}}\\t{{.Ports}}"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
         containers = []
-        for line in result.stdout.strip().split('\n'):
-            if line and ('isaac' in line.lower() and 'gr00t' in line.lower()):
-                parts = line.split('\t')
-                containers.append({
-                    "name": parts[0],
-                    "status": parts[1],
-                    "ports": parts[2] if len(parts) > 2 else ""
-                })
-        
-        return {
-            "status": "success",
-            "containers": containers,
-            "message": f"Found {len(containers)} GR00T containers"
-        }
-        
+        for line in result.stdout.strip().split("\n"):
+            if line and ("isaac" in line.lower() and "gr00t" in line.lower()):
+                parts = line.split("\t")
+                containers.append({"name": parts[0], "status": parts[1], "ports": parts[2] if len(parts) > 2 else ""})
+
+        return {"status": "success", "containers": containers, "message": f"Found {len(containers)} GR00T containers"}
+
     except subprocess.CalledProcessError as e:
         return {"status": "error", "message": f"Failed to find containers: {e}"}
 
@@ -118,21 +128,13 @@ def _list_running_services() -> Dict[str, Any]:
     try:
         services = []
         common_ports = [5555, 5556, 5557, 5558, 8000, 8001, 8002, 8003]
-        
+
         for port in common_ports:
             if _is_zmq_service_running(port):
-                services.append({
-                    "port": port,
-                    "protocol": "ZMQ",
-                    "status": "running"
-                })
-        
-        return {
-            "status": "success", 
-            "services": services,
-            "message": f"Found {len(services)} running ZMQ services"
-        }
-        
+                services.append({"port": port, "protocol": "ZMQ", "status": "running"})
+
+        return {"status": "success", "services": services, "message": f"Found {len(services)} running ZMQ services"}
+
     except Exception as e:
         return {"status": "error", "message": f"Failed to list services: {e}"}
 
@@ -152,18 +154,13 @@ def _is_zmq_service_running(port: int) -> bool:
 def _check_service_status(port: int) -> Dict[str, Any]:
     """Check status of ZMQ service on specific port."""
     if _is_zmq_service_running(port):
-        return {
-            "status": "success",
-            "port": port, 
-            "service_status": "running",
-            "protocol": "ZMQ"
-        }
+        return {"status": "success", "port": port, "service_status": "running", "protocol": "ZMQ"}
     else:
         return {
             "status": "error",
             "port": port,
-            "service_status": "not_running", 
-            "message": f"No ZMQ service running on port {port}"
+            "service_status": "not_running",
+            "message": f"No ZMQ service running on port {port}",
         }
 
 
@@ -171,56 +168,44 @@ def _stop_service(port: int) -> Dict[str, Any]:
     """Stop service running on specific port."""
     try:
         # Find process using the port
-        result = subprocess.run([
-            "lsof", "-t", f"-i:{port}"
-        ], capture_output=True, text=True)
-        
+        result = subprocess.run(["lsof", "-t", f"-i:{port}"], capture_output=True, text=True)
+
         if result.returncode == 0:
-            pids = result.stdout.strip().split('\n')
+            pids = result.stdout.strip().split("\n")
             for pid in pids:
                 if pid:
                     subprocess.run(["kill", "-TERM", pid], check=True)
-            
+
             # Wait for graceful shutdown
             time.sleep(2)
-            
+
             # Force kill if still running
-            result = subprocess.run([
-                "lsof", "-t", f"-i:{port}"
-            ], capture_output=True, text=True)
-            
+            result = subprocess.run(["lsof", "-t", f"-i:{port}"], capture_output=True, text=True)
+
             if result.returncode == 0:
-                pids = result.stdout.strip().split('\n')
+                pids = result.stdout.strip().split("\n")
                 for pid in pids:
                     if pid:
                         subprocess.run(["kill", "-KILL", pid], check=True)
-            
-            return {
-                "status": "success",
-                "port": port,
-                "message": f"Service on port {port} stopped"
-            }
+
+            return {"status": "success", "port": port, "message": f"Service on port {port} stopped"}
         else:
-            return {
-                "status": "success",
-                "port": port, 
-                "message": f"No service running on port {port}"
-            }
-            
+            return {"status": "success", "port": port, "message": f"No service running on port {port}"}
+
     except Exception as e:
         return {"status": "error", "message": f"Failed to stop service: {e}"}
 
 
 def _start_service(
     checkpoint_path: str,
-    port: int, 
+    port: int,
     data_config: str,
     embodiment_tag: str,
     denoising_steps: int,
     host: str,
     container_name: str,
     policy_name: str,
-    timeout: int
+    timeout: int,
 ) -> Dict[str, Any]:
     """Start GR00T inference service using Isaac-GR00T's native inference service."""
     try:
@@ -229,29 +214,39 @@ def _start_service(
             containers = _find_gr00t_containers()
             if containers["status"] == "error":
                 return containers
-            
+
             running_containers = [c for c in containers["containers"] if "Up" in c["status"]]
             if not running_containers:
                 return {"status": "error", "message": "No running GR00T containers found"}
-            
+
             container_name = running_containers[0]["name"]
-        
+
         # Build Isaac-GR00T inference service command
         cmd = [
-            "docker", "exec", "-d", container_name,
-            "python", "/opt/Isaac-GR00T/scripts/inference_service.py",
+            "docker",
+            "exec",
+            "-d",
+            container_name,
+            "python",
+            "/opt/Isaac-GR00T/scripts/inference_service.py",
             "--server",
-            "--model-path", checkpoint_path,
-            "--port", str(port),
-            "--host", host,
-            "--data-config", data_config,
-            "--embodiment-tag", embodiment_tag,
-            "--denoising-steps", str(denoising_steps)
+            "--model-path",
+            checkpoint_path,
+            "--port",
+            str(port),
+            "--host",
+            host,
+            "--data-config",
+            data_config,
+            "--embodiment-tag",
+            embodiment_tag,
+            "--denoising-steps",
+            str(denoising_steps),
         ]
-        
+
         # Start service
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        
+
         # Wait for ZMQ service to start
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -265,15 +260,12 @@ def _start_service(
                     "protocol": "ZMQ",
                     "data_config": data_config,
                     "embodiment_tag": embodiment_tag,
-                    "message": f"GR00T ZMQ service started on port {port}"
+                    "message": f"GR00T ZMQ service started on port {port}",
                 }
             time.sleep(1)
-        
-        return {
-            "status": "error", 
-            "message": f"ZMQ service failed to start within {timeout} seconds"
-        }
-        
+
+        return {"status": "error", "message": f"ZMQ service failed to start within {timeout} seconds"}
+
     except subprocess.CalledProcessError as e:
         return {"status": "error", "message": f"Failed to start service: {e}"}
     except Exception as e:
@@ -283,15 +275,15 @@ def _start_service(
 if __name__ == "__main__":
     print("🐳 GR00T Inference Service Manager (Isaac-GR00T Native)")
     print("Uses Isaac-GR00T's ZMQ-based inference service")
-    
+
     # Example usage
     examples = [
         "gr00t_inference(action='find_containers')",
         "gr00t_inference(action='start', checkpoint_path='/data/checkpoints/gr00t-wave/checkpoint-300000', port=5555, policy_name='wave_model')",
         "gr00t_inference(action='list')",
-        "gr00t_inference(action='status', port=5555)", 
-        "gr00t_inference(action='stop', port=5555)"
+        "gr00t_inference(action='status', port=5555)",
+        "gr00t_inference(action='stop', port=5555)",
     ]
-    
+
     for example in examples:
         print(f"  {example}")

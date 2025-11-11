@@ -17,19 +17,14 @@ class Policy(ABC):
     """Abstract base class for VLA policies."""
 
     @abstractmethod
-    async def get_actions(
-        self, 
-        observation_dict: Dict[str, Any], 
-        instruction: str,
-        **kwargs
-    ) -> List[Dict[str, Any]]:
+    async def get_actions(self, observation_dict: Dict[str, Any], instruction: str, **kwargs) -> List[Dict[str, Any]]:
         """Get actions from policy given observation and instruction.
-        
+
         Args:
             observation_dict: Robot observation (cameras + state)
             instruction: Natural language instruction
             **kwargs: Provider-specific parameters
-            
+
         Returns:
             List of action dictionaries for robot execution
         """
@@ -64,15 +59,10 @@ class MockPolicy(Policy):
         self.robot_state_keys = robot_state_keys
         logger.info(f"🔧 Mock robot state keys: {self.robot_state_keys}")
 
-    async def get_actions(
-        self, 
-        observation_dict: Dict[str, Any], 
-        instruction: str,
-        **kwargs
-    ) -> List[Dict[str, Any]]:
+    async def get_actions(self, observation_dict: Dict[str, Any], instruction: str, **kwargs) -> List[Dict[str, Any]]:
         """Return mock actions."""
         import numpy as np
-        
+
         # Generate mock actions
         mock_actions = []
         for _ in range(8):  # Mock action horizon
@@ -81,7 +71,7 @@ class MockPolicy(Policy):
                 # Generate small random movements
                 action_dict[key] = float(np.random.uniform(-0.1, 0.1))
             mock_actions.append(action_dict)
-        
+
         logger.info(f"🎭 Mock policy generated {len(mock_actions)} actions for: '{instruction}'")
         return mock_actions
 
@@ -89,16 +79,16 @@ class MockPolicy(Policy):
 # Factory function for creating policies
 def create_policy(provider: str, **kwargs) -> Policy:
     """Create a policy instance based on provider name.
-    
+
     Args:
         provider: Provider name ("groot", "mock", etc.)
         **kwargs: Provider-specific parameters
             For groot: data_config (str or object), host, port, etc.
             For mock: any parameters (ignored)
-        
+
     Returns:
         Policy instance
-        
+
     Raises:
         ValueError: If provider is not supported
     """
@@ -106,6 +96,7 @@ def create_policy(provider: str, **kwargs) -> Policy:
         return MockPolicy(**kwargs)
     elif provider == "groot":
         from .groot import Gr00tPolicy
+
         return Gr00tPolicy(**kwargs)
     else:
         # Try dynamic import for extensibility

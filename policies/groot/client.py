@@ -23,7 +23,7 @@ from .data_config import ModalityConfig
 
 class MsgSerializer:
     """Message serializer for ZMQ communication with GR00T inference service."""
-    
+
     @staticmethod
     def to_bytes(data: dict) -> bytes:
         return msgpack.packb(data, default=MsgSerializer.encode_custom_classes)
@@ -54,13 +54,14 @@ class MsgSerializer:
 @dataclass
 class EndpointHandler:
     """Handler for inference service endpoints."""
+
     handler: Callable
     requires_input: bool = True
 
 
 class BaseInferenceClient:
     """Base client for communicating with GR00T inference services."""
-    
+
     def __init__(
         self,
         host: str = "localhost",
@@ -93,9 +94,7 @@ class BaseInferenceClient:
         """Kill the inference server."""
         self.call_endpoint("kill", requires_input=False)
 
-    def call_endpoint(
-        self, endpoint: str, data: dict | None = None, requires_input: bool = True
-    ) -> dict:
+    def call_endpoint(self, endpoint: str, data: dict | None = None, requires_input: bool = True) -> dict:
         """Call an endpoint on the inference server.
 
         Args:
@@ -119,27 +118,27 @@ class BaseInferenceClient:
 
     def __del__(self):
         """Cleanup resources on destruction"""
-        if hasattr(self, 'socket'):
+        if hasattr(self, "socket"):
             self.socket.close()
-        if hasattr(self, 'context'):
+        if hasattr(self, "context"):
             self.context.term()
 
 
 class ExternalRobotInferenceClient(BaseInferenceClient):
     """Client for communicating with GR00T inference services.
-    
+
     This class provides the interface to GR00T policy inference servers,
     allowing robot control through natural language instructions.
     """
 
     def get_action(self, observations: Dict[str, Any]) -> Dict[str, Any]:
         """Get actions from the GR00T policy server.
-        
+
         Args:
             observations: Robot observations dict containing camera feeds,
                          robot state, and language instructions.
                          Format defined by the policy's modality configuration.
-        
+
         Returns:
             Action chunk containing robot actions for execution.
         """
