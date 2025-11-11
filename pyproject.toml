@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "strands-robots"
-version = "0.1.0"
+version = "0.2.0"
 description = "Robot Control with LeRobot Integration for Strands Agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -31,8 +31,10 @@ dependencies = [
     "lerobot",
     "numpy>=1.21.0",
     "torch>=2.0.0",
-    "opencv-python>=4.5.0",
+    "opencv-python-headless>=4.5.0",
     "Pillow>=8.0.0",
+    "msgpack>=1.0.0",
+    "pyzmq>=27.0.0",
 ]
 
 [project.optional-dependencies]
@@ -53,7 +55,7 @@ Issues = "https://github.com/cagataycali/strands-robots/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["strands_robots*"]
+include = ["strands_robots", "strands_robots.*"]
 
 [tool.black]
 line-length = 120
