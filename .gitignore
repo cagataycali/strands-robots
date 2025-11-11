@@ -4,3 +4,4 @@ camera_samples
 *.bak
 *.pkl
 *.egg-info
+.venv
