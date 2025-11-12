@@ -1,4 +1,4 @@
-# strands-robots
+# Strands Robots
 
 Robot control for Strands Agents.
 
@@ -197,6 +197,5 @@ Apache-2.0
 
 ## Links
 
-- **Repository**: https://github.com/cagataycali/strands-robots
 - **Issues**: https://github.com/cagataycali/strands-robots/issues
-- **Strands SDK**: https://github.com/strands-agents/strands
+- **Strands SDK**: https://github.com/strands-agents/sdk-python
