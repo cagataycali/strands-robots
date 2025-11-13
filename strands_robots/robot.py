@@ -184,17 +184,29 @@ class Robot(AgentTool):
 
         try:
             logger.info(f"🔌 Connecting to {self.robot}...")
-            await asyncio.to_thread(self.robot.connect)
+
+            # Check if robot is calibrated first
+            self.robot.bus.connect()  # Connect bus first to check calibration
+
+            if not self.robot.is_calibrated:
+                logger.error(f"❌ Robot {self.robot} is not calibrated")
+                logger.error(f"💡 Please calibrate the robot manually first using LeRobot's calibration process")
+                self.robot.bus.disconnect()
+                return False
+
+            # Connect with calibration disabled since we already verified it exists
+            await asyncio.to_thread(self.robot.connect, False)  # calibrate=False
 
             if not self.robot.is_connected:
                 logger.error(f"❌ Failed to connect to {self.robot}")
                 return False
 
-            logger.info(f"✅ {self.robot} connected")
+            logger.info(f"✅ {self.robot} connected and calibrated")
             return True
 
         except Exception as e:
             logger.error(f"❌ Robot connection failed: {e}")
+            logger.error(f"💡 Ensure robot is calibrated and accessible on the specified port")
             return False
 
     async def _initialize_policy(self, policy: Policy) -> bool:

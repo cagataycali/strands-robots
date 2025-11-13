@@ -20,7 +20,10 @@ try:
     from strands_robots.policies import Policy, MockPolicy, create_policy
     from strands_robots.tools.gr00t_inference import gr00t_inference
     from strands_robots.tools.lerobot_camera import lerobot_camera
+    from strands_robots.tools.lerobot_teleoperate import lerobot_teleoperate
+    from strands_robots.tools.lerobot_calibrate import lerobot_calibrate
     from strands_robots.tools.serial_tool import serial_tool
+    from strands_robots.tools.pose_tool import pose_tool
 
     try:
         from strands_robots.policies.groot import Gr00tPolicy
@@ -33,14 +36,28 @@ try:
             "create_policy",
             "gr00t_inference",
             "lerobot_camera",
+            "lerobot_teleoperate",
+            "lerobot_calibrate",
             "serial_tool",
+            "pose_tool",
         ]
     except ImportError as e:
         warnings.warn(f"GR00T policy not available (missing dependencies): {e}")
-        __all__ = ["Robot", "Policy", "MockPolicy", "create_policy", "gr00t_inference", "lerobot_camera", "serial_tool"]
+        __all__ = [
+            "Robot",
+            "Policy",
+            "MockPolicy",
+            "create_policy",
+            "gr00t_inference",
+            "lerobot_camera",
+            "lerobot_teleoperate",
+            "lerobot_calibrate",
+            "serial_tool",
+            "pose_tool",
+        ]
 
 except ImportError as e:
     warnings.warn(f"Could not import core components: {e}")
     __all__ = []
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"

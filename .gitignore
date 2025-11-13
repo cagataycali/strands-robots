@@ -7,3 +7,4 @@ camera_samples
 .venv
 build
 dist
+.strands_robots

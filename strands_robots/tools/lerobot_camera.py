@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Advanced LeRobot-based camera tool for Strands agents.
+LeRobot-based camera tool for Strands agents.
 Leverages LeRobot's OpenCV and RealSense camera classes for professional camera management.
 """
 
@@ -1006,12 +1006,3 @@ def _get_opencv_backend_name() -> str:
         cv2.CAP_ANY: "Auto",
     }
     return backend_names.get(backend, "Unknown")
-
-
-if __name__ == "__main__":
-    # Test the camera tool
-    print("🎥 Testing LeRobot Camera Tool...")
-
-    # Discover cameras
-    result = lerobot_camera(action="discover")
-    print(f"Discovery result: {result}")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from strands import Agent
 from strands_tools import shell, editor, file_read, file_write
-from strands_robots import Robot, gr00t_inference, lerobot_camera
+from strands_robots import Robot, gr00t_inference, lerobot_camera, lerobot_calibrate, lerobot_teleoperate, pose_tool
 
 robot = Robot(
     tool_name="orange_arm",
@@ -15,7 +15,8 @@ robot = Robot(
 )
 
 agent = Agent(
-    tools=[shell, editor, file_read, file_write, robot, gr00t_inference, lerobot_camera], load_tools_from_directory=True
+    tools=[shell, editor, file_read, file_write, robot, gr00t_inference, lerobot_camera, lerobot_calibrate, lerobot_teleoperate, pose_tool],
+    load_tools_from_directory=True,
 )
 
 agent.tool.gr00t_inference(
