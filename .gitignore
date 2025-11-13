@@ -6,3 +6,4 @@ camera_samples
 *.egg-info
 .venv
 build
+dist
