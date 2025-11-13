@@ -5,3 +5,4 @@ camera_samples
 *.pkl
 *.egg-info
 .venv
+build

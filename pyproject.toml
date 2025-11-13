@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "strands-robots"
-version = "0.2.0"
+version = "0.3.0"
 description = "Robot Control with LeRobot Integration for Strands Agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -29,6 +29,7 @@ classifiers = [
 dependencies = [
     "strands-agents",
     "lerobot",
+    "lerobot[all]",
     "numpy>=1.21.0",
     "torch>=2.0.0",
     "opencv-python-headless>=4.5.0",

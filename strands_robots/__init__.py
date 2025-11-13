@@ -16,16 +16,14 @@ Key features:
 import warnings
 
 try:
-    from .robot import Robot
-    from .policies import Policy, MockPolicy, create_policy
-
-    # Import tools
-    from .tools.gr00t_inference import gr00t_inference
-    from .tools.lerobot_camera import lerobot_camera
-    from .tools.serial_tool import serial_tool
+    from strands_robots.robot import Robot
+    from strands_robots.policies import Policy, MockPolicy, create_policy
+    from strands_robots.tools.gr00t_inference import gr00t_inference
+    from strands_robots.tools.lerobot_camera import lerobot_camera
+    from strands_robots.tools.serial_tool import serial_tool
 
     try:
-        from .policies.groot import Gr00tPolicy
+        from strands_robots.policies.groot import Gr00tPolicy
 
         __all__ = [
             "Robot",
@@ -45,4 +43,4 @@ except ImportError as e:
     warnings.warn(f"Could not import core components: {e}")
     __all__ = []
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

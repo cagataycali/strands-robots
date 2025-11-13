@@ -102,10 +102,17 @@ def gr00t_inference(
 
 
 def _find_gr00t_containers() -> Dict[str, Any]:
-    """Find available isaac-gr00t containers."""
+    """Find available Isaac-GR00T containers.
+
+    Looks for containers with Isaac-GR00T images by checking:
+    1. Direct match: "isaac-gr00t" in image name
+    2. Fallback: "isaac" in image AND ("gr00t" in image OR "jetson" in container name)
+
+    Returns both running and stopped containers.
+    """
     try:
         result = subprocess.run(
-            ["docker", "ps", "-a", "--format", "{{.Names}}\\t{{.Status}}\\t{{.Ports}}"],
+            ["docker", "ps", "-a", "--format", "{{.Names}}\\t{{.Image}}\\t{{.Status}}\\t{{.Ports}}"],
             capture_output=True,
             text=True,
             check=True,
@@ -113,9 +120,20 @@ def _find_gr00t_containers() -> Dict[str, Any]:
 
         containers = []
         for line in result.stdout.strip().split("\n"):
-            if line and ("isaac" in line.lower() and "gr00t" in line.lower()):
+            if line:
                 parts = line.split("\t")
-                containers.append({"name": parts[0], "status": parts[1], "ports": parts[2] if len(parts) > 2 else ""})
+                if len(parts) >= 3:
+                    name, image, status = parts[0], parts[1], parts[2]
+                    ports = parts[3] if len(parts) > 3 else ""
+
+                    # Check if this is an Isaac-GR00T container by image name
+                    # Look for isaac-gr00t in image name, or isaac-sim with gr00t context
+                    is_gr00t_container = "isaac-gr00t" in image.lower() or (
+                        "isaac" in image.lower() and ("gr00t" in image.lower() or "jetson" in name.lower())
+                    )
+
+                    if is_gr00t_container:
+                        containers.append({"name": name, "image": image, "status": status, "ports": ports})
 
         return {"status": "success", "containers": containers, "message": f"Found {len(containers)} GR00T containers"}
 
@@ -165,9 +183,59 @@ def _check_service_status(port: int) -> Dict[str, Any]:
 
 
 def _stop_service(port: int) -> Dict[str, Any]:
-    """Stop service running on specific port."""
+    """Stop GR00T inference service running on specific port."""
     try:
-        # Find process using the port
+        # First try to find and kill processes in Docker containers
+        containers_result = _find_gr00t_containers()
+        if containers_result["status"] == "success":
+            running_containers = [c for c in containers_result["containers"] if "Up" in c["status"]]
+
+            for container in running_containers:
+                container_name = container["name"]
+                try:
+                    # Find inference service processes in this container using the specific port
+                    result = subprocess.run(
+                        ["docker", "exec", container_name, "pgrep", "-f", f"inference_service.py.*--port {port}"],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+
+                    if result.returncode == 0 and result.stdout.strip():
+                        pids = result.stdout.strip().split("\n")
+                        for pid in pids:
+                            if pid:
+                                # Kill the process inside the container
+                                subprocess.run(["docker", "exec", container_name, "kill", "-TERM", pid], check=True)
+
+                        # Wait for graceful shutdown
+                        time.sleep(2)
+
+                        # Force kill if still running
+                        result = subprocess.run(
+                            ["docker", "exec", container_name, "pgrep", "-f", f"inference_service.py.*--port {port}"],
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        )
+
+                        if result.returncode == 0 and result.stdout.strip():
+                            pids = result.stdout.strip().split("\n")
+                            for pid in pids:
+                                if pid:
+                                    subprocess.run(["docker", "exec", container_name, "kill", "-KILL", pid], check=True)
+
+                        return {
+                            "status": "success",
+                            "port": port,
+                            "container": container_name,
+                            "message": f"GR00T service on port {port} stopped in container {container_name}",
+                        }
+
+                except subprocess.CalledProcessError:
+                    continue  # Try next container
+
+        # Fallback: try to find processes on host system
         result = subprocess.run(["lsof", "-t", f"-i:{port}"], capture_output=True, text=True)
 
         if result.returncode == 0:
