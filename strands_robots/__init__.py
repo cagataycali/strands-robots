@@ -60,4 +60,4 @@ except ImportError as e:
     warnings.warn(f"Could not import core components: {e}")
     __all__ = []
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"

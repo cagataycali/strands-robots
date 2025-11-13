@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "strands-robots"
-version = "0.3.2"
+version = "0.3.3"
 description = "Robot Control with LeRobot Integration for Strands Agents"
 readme = "README.md"
 requires-python = ">=3.10"

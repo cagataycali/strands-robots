@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Session storage directory
 SESSION_DIR = Path.cwd() / ".strands_robots/.sessions"
-SESSION_DIR.mkdir(exist_ok=True)
+SESSION_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class SessionManager:
