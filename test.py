@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from strands import Agent
-from strands_tools import shell, editor, file_read, file_write
-from strands_robots import Robot, gr00t_inference, lerobot_camera, lerobot_calibrate, lerobot_teleoperate, pose_tool
+from strands_tools import shell, slack
+from strands_robots import Robot, gr00t_inference, lerobot_camera, pose_tool
 
 robot = Robot(
     tool_name="orange_arm",
@@ -15,7 +15,7 @@ robot = Robot(
 )
 
 agent = Agent(
-    tools=[shell, editor, file_read, file_write, robot, gr00t_inference, lerobot_camera, lerobot_calibrate, lerobot_teleoperate, pose_tool],
+    tools=[shell, robot, gr00t_inference, lerobot_camera, pose_tool, slack],
     load_tools_from_directory=True,
 )
 
@@ -28,6 +28,7 @@ agent.tool.gr00t_inference(
 
 # agent("Use the orange_arm robot to wave the arm using GR00T policy on port 8000")
 
+# agent.tool.slack(action="start_socket_mode", agent=agent)
 # agent.tool.gr00t_inference(action="stop", port=8000)
 
 while True:

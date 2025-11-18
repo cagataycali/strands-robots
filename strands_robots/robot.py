@@ -4,12 +4,23 @@ Universal Robot Control with Policy Abstraction for Any VLA Provider
 
 This module provides a clean robot interface that works with any LeRobot-compatible
 robot and any VLA provider through the Policy abstraction.
+
+Features:
+- Async robot task execution with real-time status reporting
+- Non-blocking operations - robot moves while tool returns status
+- Stop functionality to interrupt running tasks
+- Connection state management with proper error handling
+- Policy abstraction for any VLA provider
 """
 
 import asyncio
 import logging
 import time
+import threading
 from typing import Any, Dict, AsyncGenerator, Optional, Union, List
+from concurrent.futures import ThreadPoolExecutor, Future
+from dataclasses import dataclass
+from enum import Enum
 
 import numpy as np
 from lerobot.robots.robot import Robot as LeRobotRobot
@@ -26,8 +37,32 @@ from .policies import Policy, create_policy
 logger = logging.getLogger(__name__)
 
 
+class TaskStatus(Enum):
+    """Robot task execution status"""
+
+    IDLE = "idle"
+    CONNECTING = "connecting"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    STOPPED = "stopped"
+    ERROR = "error"
+
+
+@dataclass
+class RobotTaskState:
+    """Robot task execution state"""
+
+    status: TaskStatus = TaskStatus.IDLE
+    instruction: str = ""
+    start_time: float = 0.0
+    duration: float = 0.0
+    step_count: int = 0
+    error_message: str = ""
+    task_future: Optional[Future] = None
+
+
 class Robot(AgentTool):
-    """Universal robot control with policy abstraction for any LeRobot-compatible robot."""
+    """Universal robot control with async task execution and status reporting."""
 
     def __init__(
         self,
@@ -38,7 +73,7 @@ class Robot(AgentTool):
         data_config: Union[str, Any, None] = None,
         **kwargs,
     ):
-        """Initialize Robot - minimal, policy specified at invocation time.
+        """Initialize Robot with async capabilities.
 
         Args:
             tool_name: Name for this robot tool
@@ -55,10 +90,15 @@ class Robot(AgentTool):
         self.action_horizon = action_horizon
         self.data_config = data_config
 
+        # Task execution state
+        self._task_state = RobotTaskState()
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"{tool_name}_executor")
+        self._shutdown_event = threading.Event()
+
         # Initialize robot using lerobot's abstraction
         self.robot = self._initialize_robot(robot, cameras, **kwargs)
 
-        logger.info(f"🤖 {tool_name} initialized")
+        logger.info(f"🤖 {tool_name} initialized with async capabilities")
         logger.info(f"📱 Robot: {self.robot.name} (type: {getattr(self.robot, 'robot_type', 'unknown')})")
 
         # Get camera info if available
@@ -178,34 +218,53 @@ class Robot(AgentTool):
         return create_policy(policy_provider, **policy_config)
 
     async def _connect_robot(self) -> bool:
-        """Connect to robot hardware."""
-        if self.robot.is_connected:
-            return True
-
+        """Connect to robot hardware with proper error handling."""
         try:
+            # Import lerobot exceptions
+            from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
+
+            # Check if already connected
+            if self.robot.is_connected:
+                logger.info(f"✅ {self.robot} already connected")
+                return True
+
             logger.info(f"🔌 Connecting to {self.robot}...")
 
-            # Check if robot is calibrated first
-            self.robot.bus.connect()  # Connect bus first to check calibration
+            # Handle robot connection using lerobot's error handling patterns
+            try:
+                if not self.robot.is_connected:
+                    await asyncio.to_thread(self.robot.connect, False)  # calibrate=False
 
-            if not self.robot.is_calibrated:
-                logger.error(f"❌ Robot {self.robot} is not calibrated")
-                logger.error(f"💡 Please calibrate the robot manually first using LeRobot's calibration process")
-                self.robot.bus.disconnect()
-                return False
+            except DeviceAlreadyConnectedError:
+                # This is expected and fine - robot is already connected
+                logger.info(f"✅ {self.robot} was already connected")
 
-            # Connect with calibration disabled since we already verified it exists
-            await asyncio.to_thread(self.robot.connect, False)  # calibrate=False
+            except Exception as e:
+                # Check if it's the string version of "already connected" error
+                error_str = str(e).lower()
+                if "already connected" in error_str or "is already connected" in error_str:
+                    logger.info(f"✅ {self.robot} connection already established")
+                else:
+                    # Re-raise if it's a different error
+                    raise e
 
+            # Final connection check
             if not self.robot.is_connected:
                 logger.error(f"❌ Failed to connect to {self.robot}")
                 return False
 
-            logger.info(f"✅ {self.robot} connected and calibrated")
+            # Check robot calibration
+            if hasattr(self.robot, "is_calibrated") and not self.robot.is_calibrated:
+                logger.error(f"❌ Robot {self.robot} is not calibrated")
+                logger.error(f"💡 Please calibrate the robot manually first using LeRobot's calibration process")
+                return False
+
+            logger.info(f"✅ {self.robot} connected and ready")
             return True
 
         except Exception as e:
-            logger.error(f"❌ Robot connection failed: {e}")
+            error_msg = f"❌ Robot connection failed: {e}"
+            logger.error(error_msg)
             logger.error(f"💡 Ensure robot is calibrated and accessible on the specified port")
             return False
 
@@ -230,41 +289,51 @@ class Robot(AgentTool):
             logger.error(f"❌ Failed to initialize policy: {e}")
             return False
 
-    async def _execute_task(
+    async def _execute_task_async(
         self,
         instruction: str,
         policy_port: Optional[int] = None,
         policy_host: str = "localhost",
         policy_provider: str = "groot",
         duration: float = 30.0,
-    ) -> Dict[str, Any]:
-        """Execute robot task using specified policy."""
-
-        # Connect to robot
-        if not await self._connect_robot():
-            return {
-                "status": "error",
-                "content": [{"text": f"❌ Failed to connect to {self.tool_name_str}"}],
-            }
-
+    ) -> None:
+        """Execute robot task in background thread (internal method)."""
         try:
+            # Update task state
+            self._task_state.status = TaskStatus.CONNECTING
+            self._task_state.instruction = instruction
+            self._task_state.start_time = time.time()
+            self._task_state.step_count = 0
+            self._task_state.error_message = ""
+
+            # Connect to robot
+            connected = await self._connect_robot()
+            if not connected:
+                self._task_state.status = TaskStatus.ERROR
+                self._task_state.error_message = f"Failed to connect to {self.tool_name_str}"
+                return
+
             # Get policy instance
             policy_instance = await self._get_policy(policy_port, policy_host, policy_provider)
 
             # Initialize policy with robot state keys
             if not await self._initialize_policy(policy_instance):
-                return {
-                    "status": "error",
-                    "content": [{"text": f"❌ Failed to initialize policy"}],
-                }
+                self._task_state.status = TaskStatus.ERROR
+                self._task_state.error_message = "Failed to initialize policy"
+                return
 
-            logger.info(f"🎯 Executing: '{instruction}' on {self.tool_name_str}")
+            logger.info(f"🎯 Starting task: '{instruction}' on {self.tool_name_str}")
             logger.info(f"🧠 Using policy: {policy_provider} on {policy_host}:{policy_port}")
 
+            self._task_state.status = TaskStatus.RUNNING
             start_time = time.time()
-            step_count = 0
 
-            while time.time() - start_time < duration:
+            while (
+                time.time() - start_time < duration
+                and self._task_state.status == TaskStatus.RUNNING
+                and not self._shutdown_event.is_set()
+            ):
+
                 # Get observation from robot
                 observation = await asyncio.to_thread(self.robot.get_observation)
 
@@ -273,32 +342,163 @@ class Robot(AgentTool):
 
                 # Execute actions from chunk
                 for action_dict in robot_actions[: self.action_horizon]:
+                    if self._task_state.status != TaskStatus.RUNNING:
+                        break
                     await asyncio.to_thread(self.robot.send_action, action_dict)
-                    step_count += 1
+                    self._task_state.step_count += 1
 
                 await asyncio.sleep(0.01)
 
+            # Update final state
             elapsed = time.time() - start_time
+            self._task_state.duration = elapsed
 
-            return {
-                "status": "success",
-                "content": [
-                    {
-                        "text": f"✅ Task completed: '{instruction}'\n"
-                        f"🤖 Robot: {self.tool_name_str} ({self.robot})\n"
-                        f"🧠 Policy: {policy_provider} on {policy_host}:{policy_port}\n"
-                        f"⏱️ Duration: {elapsed:.1f}s\n"
-                        f"🎯 Steps: {step_count}"
-                    }
-                ],
-            }
+            if self._task_state.status == TaskStatus.RUNNING:
+                self._task_state.status = TaskStatus.COMPLETED
+                logger.info(
+                    f"✅ Task completed: '{instruction}' in {elapsed:.1f}s ({self._task_state.step_count} steps)"
+                )
 
         except Exception as e:
             logger.error(f"❌ Task execution failed: {e}")
+            self._task_state.status = TaskStatus.ERROR
+            self._task_state.error_message = str(e)
+
+    def _execute_task_sync(
+        self,
+        instruction: str,
+        policy_port: Optional[int] = None,
+        policy_host: str = "localhost",
+        policy_provider: str = "groot",
+        duration: float = 30.0,
+    ) -> Dict[str, Any]:
+        """Execute task synchronously in thread - no new event loop."""
+
+        # Import here to avoid conflicts
+        import asyncio
+
+        # Run task without creating new event loop - let it run in thread
+        async def task_runner():
+            await self._execute_task_async(instruction, policy_port, policy_host, policy_provider, duration)
+
+        # Use asyncio.run only if no loop is running, otherwise run in existing loop
+        try:
+            # Try to get the current event loop
+            current_loop = asyncio.get_running_loop()
+            # If we're already in an event loop, we need to run in a thread
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as exec:
+                future = exec.submit(lambda: asyncio.run(task_runner()))
+                future.result()  # Wait for completion
+        except RuntimeError:
+            # No event loop running - safe to create one
+            asyncio.run(task_runner())
+
+        # Return final status
+        return {
+            "status": "success" if self._task_state.status == TaskStatus.COMPLETED else "error",
+            "content": [
+                {
+                    "text": f"✅ Task: '{instruction}' - {self._task_state.status.value}\n"
+                    f"🤖 Robot: {self.tool_name_str} ({self.robot})\n"
+                    f"🧠 Policy: {policy_provider} on {policy_host}:{policy_port}\n"
+                    f"⏱️ Duration: {self._task_state.duration:.1f}s\n"
+                    f"🎯 Steps: {self._task_state.step_count}"
+                    + (f"\n❌ Error: {self._task_state.error_message}" if self._task_state.error_message else "")
+                }
+            ],
+        }
+
+    def start_task(
+        self,
+        instruction: str,
+        policy_port: Optional[int] = None,
+        policy_host: str = "localhost",
+        policy_provider: str = "groot",
+        duration: float = 30.0,
+    ) -> Dict[str, Any]:
+        """Start robot task asynchronously and return immediately."""
+
+        # Check if task is already running
+        if self._task_state.status == TaskStatus.RUNNING:
             return {
                 "status": "error",
-                "content": [{"text": f"❌ {self.tool_name_str} task failed: {str(e)}"}],
+                "content": [{"text": f"❌ Task already running: {self._task_state.instruction}"}],
             }
+
+        # Start task in background
+        self._task_state.task_future = self._executor.submit(
+            self._execute_task_sync, instruction, policy_port, policy_host, policy_provider, duration
+        )
+
+        return {
+            "status": "success",
+            "content": [
+                {
+                    "text": f"🚀 Task started: '{instruction}'\n"
+                    f"🤖 Robot: {self.tool_name_str}\n"
+                    f"💡 Use action='status' to check progress\n"
+                    f"💡 Use action='stop' to interrupt"
+                }
+            ],
+        }
+
+    def get_task_status(self) -> Dict[str, Any]:
+        """Get current task execution status."""
+
+        # Update duration for running tasks
+        if self._task_state.status == TaskStatus.RUNNING:
+            self._task_state.duration = time.time() - self._task_state.start_time
+
+        status_text = f"📊 Robot Status: {self._task_state.status.value.upper()}\n"
+
+        if self._task_state.instruction:
+            status_text += f"🎯 Task: {self._task_state.instruction}\n"
+
+        if self._task_state.status == TaskStatus.RUNNING:
+            status_text += f"⏱️ Duration: {self._task_state.duration:.1f}s\n"
+            status_text += f"🔄 Steps: {self._task_state.step_count}\n"
+        elif self._task_state.status in [TaskStatus.COMPLETED, TaskStatus.STOPPED, TaskStatus.ERROR]:
+            status_text += f"⏱️ Total Duration: {self._task_state.duration:.1f}s\n"
+            status_text += f"🎯 Total Steps: {self._task_state.step_count}\n"
+
+        if self._task_state.error_message:
+            status_text += f"❌ Error: {self._task_state.error_message}\n"
+
+        return {
+            "status": "success",
+            "content": [{"text": status_text}],
+        }
+
+    def stop_task(self) -> Dict[str, Any]:
+        """Stop currently running task."""
+
+        if self._task_state.status != TaskStatus.RUNNING:
+            return {
+                "status": "success",
+                "content": [{"text": f"💤 No task running to stop (current: {self._task_state.status.value})"}],
+            }
+
+        # Signal task to stop
+        self._task_state.status = TaskStatus.STOPPED
+
+        # Cancel future if it exists
+        if self._task_state.task_future:
+            self._task_state.task_future.cancel()
+
+        logger.info(f"🛑 Task stopped: {self._task_state.instruction}")
+
+        return {
+            "status": "success",
+            "content": [
+                {
+                    "text": f"🛑 Task stopped: '{self._task_state.instruction}'\n"
+                    f"⏱️ Duration: {self._task_state.duration:.1f}s\n"
+                    f"🎯 Steps completed: {self._task_state.step_count}"
+                }
+            ],
+        }
 
     @property
     def tool_name(self) -> str:
@@ -310,21 +510,30 @@ class Robot(AgentTool):
 
     @property
     def tool_spec(self) -> ToolSpec:
-        """Get tool specification."""
+        """Get tool specification with async actions."""
         return {
             "name": self.tool_name_str,
-            "description": f"Universal robot control ({self.robot}). Policy specified at invocation time.",
+            "description": f"Universal robot control with async task execution ({self.robot}). "
+            f"Actions: execute (blocking), start (async), status, stop. "
+            f"For execute/start actions: instruction and policy_port are required. "
+            f"For status/stop actions: no additional parameters needed.",
             "inputSchema": {
                 "json": {
                     "type": "object",
                     "properties": {
+                        "action": {
+                            "type": "string",
+                            "description": "Action to perform: execute (blocking), start (async), status, stop",
+                            "enum": ["execute", "start", "status", "stop"],
+                            "default": "execute",
+                        },
                         "instruction": {
                             "type": "string",
-                            "description": "Natural language instruction (e.g., 'Pick up the red block', 'Wave hello')",
+                            "description": "Natural language instruction (required for execute/start actions)",
                         },
                         "policy_port": {
                             "type": "integer",
-                            "description": "Policy service port (e.g., 8000 for GR00T)",
+                            "description": "Policy service port (required for execute/start actions)",
                         },
                         "policy_host": {
                             "type": "string",
@@ -342,7 +551,7 @@ class Robot(AgentTool):
                             "default": 30.0,
                         },
                     },
-                    "required": ["instruction", "policy_port"],
+                    "required": ["action"],
                 }
             },
         }
@@ -350,40 +559,82 @@ class Robot(AgentTool):
     async def stream(
         self, tool_use: ToolUse, invocation_state: dict[str, Any], **kwargs: Any
     ) -> AsyncGenerator[ToolResultEvent, None]:
-        """Stream robot task execution."""
+        """Stream robot task execution with async actions."""
         try:
             tool_use_id = tool_use.get("toolUseId", "")
             input_data = tool_use.get("input", {})
-            instruction = input_data.get("instruction", "")
-            policy_port = input_data.get("policy_port")
-            policy_host = input_data.get("policy_host", "localhost")
-            policy_provider = input_data.get("policy_provider", "groot")
-            duration = input_data.get("duration", 30.0)
 
-            if not instruction:
+            action = input_data.get("action", "execute")
+
+            # Handle different actions
+            if action == "execute":
+                # Blocking execution (legacy behavior)
+                instruction = input_data.get("instruction", "")
+                policy_port = input_data.get("policy_port")
+                policy_host = input_data.get("policy_host", "localhost")
+                policy_provider = input_data.get("policy_provider", "groot")
+                duration = input_data.get("duration", 30.0)
+
+                if not instruction or not policy_port:
+                    yield ToolResultEvent(
+                        {
+                            "toolUseId": tool_use_id,
+                            "status": "error",
+                            "content": [{"text": "❌ instruction and policy_port are required for execute action"}],
+                        }
+                    )
+                    return
+
+                # Execute task synchronously
+                task_result = self._execute_task_sync(instruction, policy_port, policy_host, policy_provider, duration)
+                result = {"toolUseId": tool_use_id, **task_result}
+                yield ToolResultEvent(result)
+
+            elif action == "start":
+                # Asynchronous execution start
+                instruction = input_data.get("instruction", "")
+                policy_port = input_data.get("policy_port")
+                policy_host = input_data.get("policy_host", "localhost")
+                policy_provider = input_data.get("policy_provider", "groot")
+                duration = input_data.get("duration", 30.0)
+
+                if not instruction or not policy_port:
+                    yield ToolResultEvent(
+                        {
+                            "toolUseId": tool_use_id,
+                            "status": "error",
+                            "content": [{"text": "❌ instruction and policy_port are required for start action"}],
+                        }
+                    )
+                    return
+
+                # Start task asynchronously
+                start_result = self.start_task(instruction, policy_port, policy_host, policy_provider, duration)
+                result = {"toolUseId": tool_use_id, **start_result}
+                yield ToolResultEvent(result)
+
+            elif action == "status":
+                # Get current task status
+                status_result = self.get_task_status()
+                result = {"toolUseId": tool_use_id, **status_result}
+                yield ToolResultEvent(result)
+
+            elif action == "stop":
+                # Stop current task
+                stop_result = self.stop_task()
+                result = {"toolUseId": tool_use_id, **stop_result}
+                yield ToolResultEvent(result)
+
+            else:
                 yield ToolResultEvent(
                     {
                         "toolUseId": tool_use_id,
                         "status": "error",
-                        "content": [{"text": f"❌ No instruction provided"}],
+                        "content": [
+                            {"text": f"❌ Unknown action: {action}. Valid actions: execute, start, status, stop"}
+                        ],
                     }
                 )
-                return
-
-            if not policy_port:
-                yield ToolResultEvent(
-                    {
-                        "toolUseId": tool_use_id,
-                        "status": "error",
-                        "content": [{"text": f"❌ policy_port is required"}],
-                    }
-                )
-                return
-
-            # Execute task
-            task_result = await self._execute_task(instruction, policy_port, policy_host, policy_provider, duration)
-            result = {"toolUseId": tool_use_id, **task_result}
-            yield ToolResultEvent(result)
 
         except Exception as e:
             logger.error(f"❌ {self.tool_name_str} error: {e}")
@@ -395,26 +646,89 @@ class Robot(AgentTool):
                 }
             )
 
+    def cleanup(self):
+        """Cleanup resources and stop any running tasks."""
+        try:
+            # Signal shutdown
+            self._shutdown_event.set()
+
+            # Stop any running task
+            if self._task_state.status == TaskStatus.RUNNING:
+                self.stop_task()
+
+            # Shutdown executor
+            self._executor.shutdown(wait=True, timeout=5.0)
+
+            logger.info(f"🧹 {self.tool_name_str} cleanup completed")
+
+        except Exception as e:
+            logger.error(f"❌ Cleanup error for {self.tool_name_str}: {e}")
+
+    def __del__(self):
+        """Destructor to ensure cleanup."""
+        try:
+            self.cleanup()
+        except:
+            pass  # Ignore errors in destructor
+
     async def get_status(self) -> Dict[str, Any]:
-        """Get robot status."""
-        return {
-            "robot_name": self.tool_name_str,
-            "robot_type": getattr(self.robot, "robot_type", self.robot.name),
-            "robot_info": str(self.robot),
-            "data_config": self.data_config,
-            "is_connected": self.robot.is_connected,
-            "cameras": (
-                list(self.robot.config.cameras.keys())
-                if hasattr(self.robot, "config") and hasattr(self.robot.config, "cameras")
-                else []
-            ),
-        }
+        """Get robot status including connection and task state."""
+        try:
+            # Get robot connection status
+            is_connected = self.robot.is_connected if hasattr(self.robot, "is_connected") else False
+            is_calibrated = self.robot.is_calibrated if hasattr(self.robot, "is_calibrated") else True
+
+            # Get camera status
+            camera_status = []
+            if hasattr(self.robot, "config") and hasattr(self.robot.config, "cameras"):
+                for name in self.robot.config.cameras.keys():
+                    camera_status.append(name)
+
+            # Build status dict
+            status_data = {
+                "robot_name": self.tool_name_str,
+                "robot_type": getattr(self.robot, "robot_type", self.robot.name),
+                "robot_info": str(self.robot),
+                "data_config": self.data_config,
+                "is_connected": is_connected,
+                "is_calibrated": is_calibrated,
+                "cameras": camera_status,
+                "task_status": self._task_state.status.value,
+                "current_instruction": self._task_state.instruction,
+                "task_duration": self._task_state.duration,
+                "task_steps": self._task_state.step_count,
+            }
+
+            # Add error info if present
+            if self._task_state.error_message:
+                status_data["task_error"] = self._task_state.error_message
+
+            return status_data
+
+        except Exception as e:
+            logger.error(f"❌ Error getting status for {self.tool_name_str}: {e}")
+            return {
+                "robot_name": self.tool_name_str,
+                "error": str(e),
+                "is_connected": False,
+                "task_status": "error",
+            }
 
     async def stop(self):
         """Stop robot and disconnect."""
         try:
+            # Stop any running task first
+            if self._task_state.status == TaskStatus.RUNNING:
+                self.stop_task()
+
+            # Disconnect robot hardware
             if hasattr(self.robot, "disconnect"):
                 await asyncio.to_thread(self.robot.disconnect)
-            logger.info(f"🛑 {self.tool_name_str} stopped")
+
+            # Cleanup resources
+            self.cleanup()
+
+            logger.info(f"🛑 {self.tool_name_str} stopped and disconnected")
+
         except Exception as e:
             logger.error(f"❌ Error stopping robot: {e}")
