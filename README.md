@@ -377,17 +377,6 @@ Store, retrieve, and execute named robot poses.
 
 ---
 
-### Calibration Tool
-
-Motor calibration with resistance detection for safe limit finding.
-
-| Action | Parameters | Description | Example |
-|--------|------------|-------------|---------|
-| `calibrate_motor` | `motor_name` | Calibrate one motor | `"Calibrate shoulder_pan"` |
-| `calibrate_all` | - | Calibrate all motors | `"Calibrate robot"` |
-| `status` | `motor_name` | Read motor status | `"Check gripper status"` |
-| `widen_limits` | `motor_name` | Expand position limits | `"Widen elbow limits"` |
-
 ## Supported Robots
 
 | Robot | Config | Cameras | Description |
