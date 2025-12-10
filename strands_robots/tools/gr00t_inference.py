@@ -3,13 +3,12 @@
 GR00T Inference Service Management Tool
 
 Manages GR00T policy inference services running in Docker containers.
-Uses Isaac-GR00T's native inference service for proper ZMQ communication.
+Uses Isaac-GR00T's native inference service for proper ZMQ/HTTP communication.
 """
 
 import subprocess
 import socket
 import time
-import json
 from typing import Dict, Any
 from strands import tool
 
@@ -20,12 +19,19 @@ def gr00t_inference(
     checkpoint_path: str = None,
     policy_name: str = None,
     port: int = None,
-    data_config: str = "so100_dualcam",
-    embodiment_tag: str = "new_embodiment",
+    data_config: str = "fourier_gr1_arms_only",
+    embodiment_tag: str = "gr1",
     denoising_steps: int = 4,
     host: str = "0.0.0.0",
     container_name: str = None,
     timeout: int = 60,
+    use_tensorrt: bool = False,
+    trt_engine_path: str = "gr00t_engine",
+    vit_dtype: str = "fp8",
+    llm_dtype: str = "nvfp4",
+    dit_dtype: str = "fp8",
+    http_server: bool = False,
+    api_token: str = None,
 ) -> Dict[str, Any]:
     """
     Manage GR00T inference services in Docker containers using Isaac-GR00T native scripts.
@@ -40,13 +46,20 @@ def gr00t_inference(
             - "find_containers": Find available isaac-gr00t containers
         checkpoint_path: Path to model checkpoint (for start/restart)
         policy_name: Name for the policy service (for registration)
-        port: Port for inference service
+        port: Port for inference service (default: 5555 for ZMQ, 8000 for HTTP)
         data_config: GR00T data config (so100_dualcam, so100, fourier_gr1_arms_only, etc.)
         embodiment_tag: Embodiment tag for model
         denoising_steps: Number of denoising steps
         host: Host to bind service to
         container_name: Specific container name
         timeout: Timeout for operations
+        use_tensorrt: Whether to use TensorRT for accelerated inference
+        trt_engine_path: Path to TensorRT engine directory (default: gr00t_engine)
+        vit_dtype: ViT model dtype - "fp16" or "fp8" (default: fp8, only with TensorRT)
+        llm_dtype: LLM model dtype - "fp16", "nvfp4", or "fp8" (default: nvfp4, only with TensorRT)
+        dit_dtype: DiT model dtype - "fp16" or "fp8" (default: fp8, only with TensorRT)
+        http_server: Use HTTP server instead of ZMQ (default: False)
+        api_token: API token for authentication (optional)
 
     Returns:
         Dict with status and information about the operation
@@ -68,17 +81,24 @@ def gr00t_inference(
         if checkpoint_path is None:
             return {"status": "error", "message": "Checkpoint path required to start service"}
         if port is None:
-            return {"status": "error", "message": "Port required to start service"}
+            port = 8000 if http_server else 5555
         return _start_service(
-            checkpoint_path,
-            port,
-            data_config,
-            embodiment_tag,
-            denoising_steps,
-            host,
-            container_name,
-            policy_name,
-            timeout,
+            checkpoint_path=checkpoint_path,
+            port=port,
+            data_config=data_config,
+            embodiment_tag=embodiment_tag,
+            denoising_steps=denoising_steps,
+            host=host,
+            container_name=container_name,
+            policy_name=policy_name,
+            timeout=timeout,
+            use_tensorrt=use_tensorrt,
+            trt_engine_path=trt_engine_path,
+            vit_dtype=vit_dtype,
+            llm_dtype=llm_dtype,
+            dit_dtype=dit_dtype,
+            http_server=http_server,
+            api_token=api_token,
         )
     elif action == "restart":
         if checkpoint_path is None or port is None:
@@ -87,29 +107,29 @@ def gr00t_inference(
         _stop_service(port)
         time.sleep(2)  # Brief pause
         return _start_service(
-            checkpoint_path,
-            port,
-            data_config,
-            embodiment_tag,
-            denoising_steps,
-            host,
-            container_name,
-            policy_name,
-            timeout,
+            checkpoint_path=checkpoint_path,
+            port=port,
+            data_config=data_config,
+            embodiment_tag=embodiment_tag,
+            denoising_steps=denoising_steps,
+            host=host,
+            container_name=container_name,
+            policy_name=policy_name,
+            timeout=timeout,
+            use_tensorrt=use_tensorrt,
+            trt_engine_path=trt_engine_path,
+            vit_dtype=vit_dtype,
+            llm_dtype=llm_dtype,
+            dit_dtype=dit_dtype,
+            http_server=http_server,
+            api_token=api_token,
         )
     else:
         return {"status": "error", "message": f"Unknown action: {action}"}
 
 
 def _find_gr00t_containers() -> Dict[str, Any]:
-    """Find available Isaac-GR00T containers.
-
-    Looks for containers with Isaac-GR00T images by checking:
-    1. Direct match: "isaac-gr00t" in image name
-    2. Fallback: "isaac" in image AND ("gr00t" in image OR "jetson" in container name)
-
-    Returns both running and stopped containers.
-    """
+    """Find available Isaac-GR00T containers."""
     try:
         result = subprocess.run(
             ["docker", "ps", "-a", "--format", "{{.Names}}\\t{{.Image}}\\t{{.Status}}\\t{{.Ports}}"],
@@ -126,8 +146,6 @@ def _find_gr00t_containers() -> Dict[str, Any]:
                     name, image, status = parts[0], parts[1], parts[2]
                     ports = parts[3] if len(parts) > 3 else ""
 
-                    # Check if this is an Isaac-GR00T container by image name
-                    # Look for isaac-gr00t in image name, or isaac-sim with gr00t context
                     is_gr00t_container = "isaac-gr00t" in image.lower() or (
                         "isaac" in image.lower() and ("gr00t" in image.lower() or "jetson" in name.lower())
                     )
@@ -142,23 +160,24 @@ def _find_gr00t_containers() -> Dict[str, Any]:
 
 
 def _list_running_services() -> Dict[str, Any]:
-    """List all running GR00T inference services by checking ZMQ ports."""
+    """List all running GR00T inference services by checking common ports."""
     try:
         services = []
         common_ports = [5555, 5556, 5557, 5558, 8000, 8001, 8002, 8003]
 
         for port in common_ports:
-            if _is_zmq_service_running(port):
-                services.append({"port": port, "protocol": "ZMQ", "status": "running"})
+            if _is_service_running(port):
+                protocol = "HTTP" if port >= 8000 else "ZMQ"
+                services.append({"port": port, "protocol": protocol, "status": "running"})
 
-        return {"status": "success", "services": services, "message": f"Found {len(services)} running ZMQ services"}
+        return {"status": "success", "services": services, "message": f"Found {len(services)} running services"}
 
     except Exception as e:
         return {"status": "error", "message": f"Failed to list services: {e}"}
 
 
-def _is_zmq_service_running(port: int) -> bool:
-    """Check if ZMQ service is running on port."""
+def _is_service_running(port: int) -> bool:
+    """Check if service is running on port."""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1)
@@ -170,22 +189,22 @@ def _is_zmq_service_running(port: int) -> bool:
 
 
 def _check_service_status(port: int) -> Dict[str, Any]:
-    """Check status of ZMQ service on specific port."""
-    if _is_zmq_service_running(port):
-        return {"status": "success", "port": port, "service_status": "running", "protocol": "ZMQ"}
+    """Check status of service on specific port."""
+    if _is_service_running(port):
+        protocol = "HTTP" if port >= 8000 else "ZMQ"
+        return {"status": "success", "port": port, "service_status": "running", "protocol": protocol}
     else:
         return {
             "status": "error",
             "port": port,
             "service_status": "not_running",
-            "message": f"No ZMQ service running on port {port}",
+            "message": f"No service running on port {port}",
         }
 
 
 def _stop_service(port: int) -> Dict[str, Any]:
     """Stop GR00T inference service running on specific port."""
     try:
-        # First try to find and kill processes in Docker containers
         containers_result = _find_gr00t_containers()
         if containers_result["status"] == "success":
             running_containers = [c for c in containers_result["containers"] if "Up" in c["status"]]
@@ -193,7 +212,6 @@ def _stop_service(port: int) -> Dict[str, Any]:
             for container in running_containers:
                 container_name = container["name"]
                 try:
-                    # Find inference service processes in this container using the specific port
                     result = subprocess.run(
                         ["docker", "exec", container_name, "pgrep", "-f", f"inference_service.py.*--port {port}"],
                         capture_output=True,
@@ -205,13 +223,10 @@ def _stop_service(port: int) -> Dict[str, Any]:
                         pids = result.stdout.strip().split("\n")
                         for pid in pids:
                             if pid:
-                                # Kill the process inside the container
                                 subprocess.run(["docker", "exec", container_name, "kill", "-TERM", pid], check=True)
 
-                        # Wait for graceful shutdown
                         time.sleep(2)
 
-                        # Force kill if still running
                         result = subprocess.run(
                             ["docker", "exec", container_name, "pgrep", "-f", f"inference_service.py.*--port {port}"],
                             capture_output=True,
@@ -233,9 +248,9 @@ def _stop_service(port: int) -> Dict[str, Any]:
                         }
 
                 except subprocess.CalledProcessError:
-                    continue  # Try next container
+                    continue
 
-        # Fallback: try to find processes on host system
+        # Fallback: try host system
         result = subprocess.run(["lsof", "-t", f"-i:{port}"], capture_output=True, text=True)
 
         if result.returncode == 0:
@@ -244,10 +259,8 @@ def _stop_service(port: int) -> Dict[str, Any]:
                 if pid:
                     subprocess.run(["kill", "-TERM", pid], check=True)
 
-            # Wait for graceful shutdown
             time.sleep(2)
 
-            # Force kill if still running
             result = subprocess.run(["lsof", "-t", f"-i:{port}"], capture_output=True, text=True)
 
             if result.returncode == 0:
@@ -274,6 +287,13 @@ def _start_service(
     container_name: str,
     policy_name: str,
     timeout: int,
+    use_tensorrt: bool,
+    trt_engine_path: str,
+    vit_dtype: str,
+    llm_dtype: str,
+    dit_dtype: str,
+    http_server: bool,
+    api_token: str,
 ) -> Dict[str, Any]:
     """Start GR00T inference service using Isaac-GR00T's native inference service."""
     try:
@@ -312,46 +332,86 @@ def _start_service(
             str(denoising_steps),
         ]
 
+        # Add HTTP server flag if requested
+        if http_server:
+            cmd.append("--http-server")
+
+        # Add TensorRT flags if enabled
+        if use_tensorrt:
+            cmd.extend(
+                [
+                    "--use-tensorrt",
+                    "--trt-engine-path",
+                    trt_engine_path,
+                    "--vit-dtype",
+                    vit_dtype,
+                    "--llm-dtype",
+                    llm_dtype,
+                    "--dit-dtype",
+                    dit_dtype,
+                ]
+            )
+
+        # Add API token if provided
+        if api_token:
+            cmd.extend(["--api-token", api_token])
+
         # Start service
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
 
-        # Wait for ZMQ service to start
+        # Wait for service to start
+        protocol = "HTTP" if http_server else "ZMQ"
         start_time = time.time()
         while time.time() - start_time < timeout:
-            if _is_zmq_service_running(port):
-                return {
+            if _is_service_running(port):
+                response = {
                     "status": "success",
                     "port": port,
                     "checkpoint_path": checkpoint_path,
                     "container_name": container_name,
                     "policy_name": policy_name,
-                    "protocol": "ZMQ",
+                    "protocol": protocol,
                     "data_config": data_config,
                     "embodiment_tag": embodiment_tag,
-                    "message": f"GR00T ZMQ service started on port {port}",
+                    "denoising_steps": denoising_steps,
+                    "message": f"GR00T {protocol} service started on port {port}",
                 }
+                if use_tensorrt:
+                    response["tensorrt"] = {
+                        "enabled": True,
+                        "engine_path": trt_engine_path,
+                        "vit_dtype": vit_dtype,
+                        "llm_dtype": llm_dtype,
+                        "dit_dtype": dit_dtype,
+                    }
+                if http_server:
+                    response["endpoint"] = f"http://{host}:{port}/act"
+                return response
             time.sleep(1)
 
-        return {"status": "error", "message": f"ZMQ service failed to start within {timeout} seconds"}
+        return {"status": "error", "message": f"{protocol} service failed to start within {timeout} seconds"}
 
     except subprocess.CalledProcessError as e:
-        return {"status": "error", "message": f"Failed to start service: {e}"}
+        return {"status": "error", "message": f"Failed to start service: {e.stderr or e}"}
     except Exception as e:
         return {"status": "error", "message": f"Unexpected error: {e}"}
 
 
 if __name__ == "__main__":
     print("🐳 GR00T Inference Service Manager (Isaac-GR00T Native)")
-    print("Uses Isaac-GR00T's ZMQ-based inference service")
-
-    # Example usage
-    examples = [
-        "gr00t_inference(action='find_containers')",
-        "gr00t_inference(action='start', checkpoint_path='/data/checkpoints/gr00t-wave/checkpoint-300000', port=5555, policy_name='wave_model')",
-        "gr00t_inference(action='list')",
-        "gr00t_inference(action='status', port=5555)",
-        "gr00t_inference(action='stop', port=5555)",
-    ]
-
-    for example in examples:
-        print(f"  {example}")
+    print("Supports ZMQ, HTTP, and TensorRT inference modes")
+    print()
+    print("Examples:")
+    print("  # Start ZMQ server (default)")
+    print("  gr00t_inference(action='start', checkpoint_path='/data/checkpoints/model', port=5555)")
+    print()
+    print("  # Start HTTP server")
+    print("  gr00t_inference(action='start', checkpoint_path='/data/checkpoints/model', port=8000, http_server=True)")
+    print()
+    print("  # Start with TensorRT acceleration")
+    print("  gr00t_inference(action='start', checkpoint_path='/data/checkpoints/model', port=5555, use_tensorrt=True)")
+    print()
+    print("  # Start HTTP + TensorRT")
+    print(
+        "  gr00t_inference(action='start', checkpoint_path='/data/checkpoints/model', port=8000, http_server=True, use_tensorrt=True)"
+    )

@@ -71,6 +71,7 @@ class Robot(AgentTool):
         cameras: Optional[Dict[str, Dict[str, Any]]] = None,
         action_horizon: int = 8,
         data_config: Union[str, Any, None] = None,
+        control_frequency: float = 50.0,
         **kwargs,
     ):
         """Initialize Robot with async capabilities.
@@ -82,6 +83,7 @@ class Robot(AgentTool):
                 {"wrist": {"type": "opencv", "index_or_path": "/dev/video0", "fps": 30}}
             action_horizon: Actions per inference step
             data_config: Data configuration (for GR00T compatibility)
+            control_frequency: Control loop frequency in Hz (default: 50Hz per NVIDIA recommendation)
             **kwargs: Robot-specific parameters (port, etc.)
         """
         super().__init__()
@@ -89,6 +91,8 @@ class Robot(AgentTool):
         self.tool_name_str = tool_name
         self.action_horizon = action_horizon
         self.data_config = data_config
+        self.control_frequency = control_frequency
+        self.action_sleep_time = 1.0 / control_frequency  # Time between actions
 
         # Task execution state
         self._task_state = RobotTaskState()
@@ -100,6 +104,7 @@ class Robot(AgentTool):
 
         logger.info(f"🤖 {tool_name} initialized with async capabilities")
         logger.info(f"📱 Robot: {self.robot.name} (type: {getattr(self.robot, 'robot_type', 'unknown')})")
+        logger.info(f"⏱️ Control frequency: {control_frequency}Hz ({self.action_sleep_time*1000:.1f}ms per action)")
 
         # Get camera info if available
         if hasattr(self.robot, "config") and hasattr(self.robot.config, "cameras"):
@@ -217,8 +222,12 @@ class Robot(AgentTool):
 
         return create_policy(policy_provider, **policy_config)
 
-    async def _connect_robot(self) -> bool:
-        """Connect to robot hardware with proper error handling."""
+    async def _connect_robot(self) -> tuple[bool, str]:
+        """Connect to robot hardware with proper error handling.
+
+        Returns:
+            tuple[bool, str]: (success, error_message) - error_message is empty on success
+        """
         try:
             # Import lerobot exceptions
             from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
@@ -226,7 +235,7 @@ class Robot(AgentTool):
             # Check if already connected
             if self.robot.is_connected:
                 logger.info(f"✅ {self.robot} already connected")
-                return True
+                return True, ""
 
             logger.info(f"🔌 Connecting to {self.robot}...")
 
@@ -250,23 +259,23 @@ class Robot(AgentTool):
 
             # Final connection check
             if not self.robot.is_connected:
-                logger.error(f"❌ Failed to connect to {self.robot}")
-                return False
+                error_msg = f"Failed to connect to {self.robot}"
+                logger.error(f"❌ {error_msg}")
+                return False, error_msg
 
             # Check robot calibration
             if hasattr(self.robot, "is_calibrated") and not self.robot.is_calibrated:
-                logger.error(f"❌ Robot {self.robot} is not calibrated")
-                logger.error(f"💡 Please calibrate the robot manually first using LeRobot's calibration process")
-                return False
+                error_msg = f"Robot {self.robot} is not calibrated. Please calibrate the robot manually first using LeRobot's calibration process (lerobot-calibrate)"
+                logger.error(f"❌ {error_msg}")
+                return False, error_msg
 
             logger.info(f"✅ {self.robot} connected and ready")
-            return True
+            return True, ""
 
         except Exception as e:
-            error_msg = f"❌ Robot connection failed: {e}"
-            logger.error(error_msg)
-            logger.error(f"💡 Ensure robot is calibrated and accessible on the specified port")
-            return False
+            error_msg = f"Robot connection failed: {e}. Ensure robot is calibrated and accessible on the specified port"
+            logger.error(f"❌ {error_msg}")
+            return False, error_msg
 
     async def _initialize_policy(self, policy: Policy) -> bool:
         """Initialize policy with robot state keys."""
@@ -307,10 +316,10 @@ class Robot(AgentTool):
             self._task_state.error_message = ""
 
             # Connect to robot
-            connected = await self._connect_robot()
+            connected, connect_error = await self._connect_robot()
             if not connected:
                 self._task_state.status = TaskStatus.ERROR
-                self._task_state.error_message = f"Failed to connect to {self.tool_name_str}"
+                self._task_state.error_message = connect_error or f"Failed to connect to {self.tool_name_str}"
                 return
 
             # Get policy instance
@@ -340,14 +349,16 @@ class Robot(AgentTool):
                 # Get actions from policy
                 robot_actions = await policy_instance.get_actions(observation, instruction)
 
-                # Execute actions from chunk
+                # Execute actions from chunk with proper timing control
+                # Wait between actions for smooth execution
                 for action_dict in robot_actions[: self.action_horizon]:
                     if self._task_state.status != TaskStatus.RUNNING:
                         break
                     await asyncio.to_thread(self.robot.send_action, action_dict)
                     self._task_state.step_count += 1
-
-                await asyncio.sleep(0.01)
+                    # Wait for action to complete before sending next action
+                    # Default 50Hz (0.02s)
+                    await asyncio.sleep(self.action_sleep_time)
 
             # Update final state
             elapsed = time.time() - start_time
@@ -657,7 +668,7 @@ class Robot(AgentTool):
                 self.stop_task()
 
             # Shutdown executor
-            self._executor.shutdown(wait=True, timeout=5.0)
+            self._executor.shutdown(wait=True)
 
             logger.info(f"🧹 {self.tool_name_str} cleanup completed")
 
