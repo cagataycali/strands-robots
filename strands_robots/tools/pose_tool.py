@@ -147,14 +147,19 @@ class MotorController:
             "gripper": {"id": 6, "range": (0, 100), "resolution": 4095},
         }
 
-    def connect(self) -> bool:
-        """Connect to robot."""
+    def connect(self) -> Tuple[bool, str]:
+        """Connect to robot.
+
+        Returns:
+            Tuple[bool, str]: (success, error_message) - error_message is empty on success
+        """
         try:
             self.serial_conn = serial.Serial(self.port, self.baudrate, timeout=1.0)
-            return True
+            return True, ""
         except Exception as e:
-            logger.error(f"Failed to connect to {self.port}: {e}")
-            return False
+            error_msg = f"Failed to connect to {self.port}: {e}"
+            logger.error(error_msg)
+            return False, error_msg
 
     def disconnect(self) -> None:
         """Disconnect from robot."""
@@ -429,18 +434,20 @@ def pose_tool(
         controller = MotorController(port)
 
         if action == "connect":
-            if controller.connect():
+            connected, error = controller.connect()
+            if connected:
                 controller.disconnect()
                 return {"status": "success", "content": [{"text": f"✅ Successfully connected to robot on {port}"}]}
             else:
-                return {"status": "error", "content": [{"text": f"❌ Failed to connect to robot on {port}"}]}
+                return {"status": "error", "content": [{"text": f"❌ {error}"}]}
 
         if action == "read_position":
             if not motor_name:
                 return {"status": "error", "content": [{"text": "❌ motor_name required"}]}
 
-            if not controller.connect():
-                return {"status": "error", "content": [{"text": f"❌ Failed to connect to {port}"}]}
+            connected, error = controller.connect()
+            if not connected:
+                return {"status": "error", "content": [{"text": f"❌ {error}"}]}
 
             try:
                 position = controller.read_motor_position(motor_name)
@@ -457,8 +464,9 @@ def pose_tool(
                 controller.disconnect()
 
         if action == "read_all":
-            if not controller.connect():
-                return {"status": "error", "content": [{"text": f"❌ Failed to connect to {port}"}]}
+            connected, error = controller.connect()
+            if not connected:
+                return {"status": "error", "content": [{"text": f"❌ {error}"}]}
 
             try:
                 positions = controller.read_all_positions()
@@ -483,8 +491,9 @@ def pose_tool(
             if not pose_name:
                 return {"status": "error", "content": [{"text": "❌ pose_name required"}]}
 
-            if not controller.connect():
-                return {"status": "error", "content": [{"text": f"❌ Failed to connect to {port}"}]}
+            connected, error = controller.connect()
+            if not connected:
+                return {"status": "error", "content": [{"text": f"❌ {error}"}]}
 
             try:
                 current_positions = controller.read_all_positions()
@@ -521,8 +530,9 @@ def pose_tool(
             if not is_valid:
                 return {"status": "error", "content": [{"text": f"❌ Pose validation failed: {msg}"}]}
 
-            if not controller.connect():
-                return {"status": "error", "content": [{"text": f"❌ Failed to connect to {port}"}]}
+            connected, error = controller.connect()
+            if not connected:
+                return {"status": "error", "content": [{"text": f"❌ {error}"}]}
 
             try:
                 success = controller.move_multiple_motors(pose.positions, smooth)
@@ -541,8 +551,9 @@ def pose_tool(
             if not motor_name or position is None:
                 return {"status": "error", "content": [{"text": "❌ motor_name and position required"}]}
 
-            if not controller.connect():
-                return {"status": "error", "content": [{"text": f"❌ Failed to connect to {port}"}]}
+            connected, error = controller.connect()
+            if not connected:
+                return {"status": "error", "content": [{"text": f"❌ {error}"}]}
 
             try:
                 success = controller.move_motor(motor_name, position)
@@ -558,8 +569,9 @@ def pose_tool(
             if not positions:
                 return {"status": "error", "content": [{"text": "❌ positions dict required"}]}
 
-            if not controller.connect():
-                return {"status": "error", "content": [{"text": f"❌ Failed to connect to {port}"}]}
+            connected, error = controller.connect()
+            if not connected:
+                return {"status": "error", "content": [{"text": f"❌ {error}"}]}
 
             try:
                 success = controller.move_multiple_motors(positions, smooth)
@@ -580,8 +592,9 @@ def pose_tool(
             if not motor_name or delta is None:
                 return {"status": "error", "content": [{"text": "❌ motor_name and delta required"}]}
 
-            if not controller.connect():
-                return {"status": "error", "content": [{"text": f"❌ Failed to connect to {port}"}]}
+            connected, error = controller.connect()
+            if not connected:
+                return {"status": "error", "content": [{"text": f"❌ {error}"}]}
 
             try:
                 success = controller.incremental_move(motor_name, delta)
@@ -605,8 +618,9 @@ def pose_tool(
                 "gripper": 0.0,
             }
 
-            if not controller.connect():
-                return {"status": "error", "content": [{"text": f"❌ Failed to connect to {port}"}]}
+            connected, error = controller.connect()
+            if not connected:
+                return {"status": "error", "content": [{"text": f"❌ {error}"}]}
 
             try:
                 success = controller.move_multiple_motors(home_positions, smooth=True)
