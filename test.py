@@ -21,9 +21,10 @@ agent = Agent(
 
 agent.tool.gr00t_inference(
     action="start",
-    checkpoint_path="/data/checkpoints/gr00t-wave/checkpoint-300000",
-    port=8000,
+    checkpoint_path="/data/checkpoints/gr00t-wave/checkpoint-300000", # Model -> https://huggingface.co/cagataydev/gr00t-wave
+    port=5555,
     data_config="so100_dualcam",
+    embodiment_tag="new_embodiment",
 )
 
 # agent("Use the orange_arm robot to wave the arm using GR00T policy on port 8000")

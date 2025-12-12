@@ -83,7 +83,7 @@ class Robot(AgentTool):
                 {"wrist": {"type": "opencv", "index_or_path": "/dev/video0", "fps": 30}}
             action_horizon: Actions per inference step
             data_config: Data configuration (for GR00T compatibility)
-            control_frequency: Control loop frequency in Hz (default: 50Hz per NVIDIA recommendation)
+            control_frequency: Control loop frequency in Hz (default: 50Hz)
             **kwargs: Robot-specific parameters (port, etc.)
         """
         super().__init__()
