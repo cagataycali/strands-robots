@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
 [project]
 name = "strands-robots"
-version = "0.3.7"
+dynamic = ["version"]
 description = "Robot Control with LeRobot Integration for Strands Agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -55,6 +55,27 @@ Homepage = "https://github.com/cagataycali/strands-robots"
 Documentation = "https://github.com/cagataycali/strands-robots#readme"
 Repository = "https://github.com/cagataycali/strands-robots.git"
 Issues = "https://github.com/cagataycali/strands-robots/issues"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["strands_robots"]
+
+[tool.hatch.envs.default]
+dependencies = [
+    "pytest>=6.0",
+    "pytest-cov",
+    "black",
+    "isort",
+    "flake8",
+    "mypy",
+]
+
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+lint = ["black --check strands_robots tests", "isort --check-only strands_robots tests", "flake8 strands_robots tests"]
+format = ["black strands_robots tests", "isort strands_robots tests"]
 
 [tool.setuptools.packages.find]
 where = ["."]

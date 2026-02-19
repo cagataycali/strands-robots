@@ -15,22 +15,20 @@ Features:
 
 import asyncio
 import logging
-import time
 import threading
-from typing import Any, Dict, AsyncGenerator, Optional, Union, List
-from concurrent.futures import ThreadPoolExecutor, Future
+import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, AsyncGenerator, Dict, Optional, Union
 
-import numpy as np
+from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
+from lerobot.robots.config import RobotConfig
 from lerobot.robots.robot import Robot as LeRobotRobot
 from lerobot.robots.utils import make_robot_from_config
-from lerobot.robots.config import RobotConfig
-from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
-
-from strands.types.tools import ToolUse, ToolResult, ToolSpec
-from strands.types._events import ToolResultEvent
 from strands.tools.tools import AgentTool
+from strands.types._events import ToolResultEvent
+from strands.types.tools import ToolSpec, ToolUse
 
 from .policies import Policy, create_policy
 
@@ -230,7 +228,7 @@ class Robot(AgentTool):
         """
         try:
             # Import lerobot exceptions
-            from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
+            from lerobot.utils.errors import DeviceAlreadyConnectedError
 
             # Check if already connected
             if self.robot.is_connected:
@@ -265,7 +263,10 @@ class Robot(AgentTool):
 
             # Check robot calibration
             if hasattr(self.robot, "is_calibrated") and not self.robot.is_calibrated:
-                error_msg = f"Robot {self.robot} is not calibrated. Please calibrate the robot manually first using LeRobot's calibration process (lerobot-calibrate)"
+                error_msg = (
+                    f"Robot {self.robot} is not calibrated. Please calibrate the robot manually"
+                    " first using LeRobot's calibration process (lerobot-calibrate)"
+                )
                 logger.error(f"❌ {error_msg}")
                 return False, error_msg
 
@@ -395,7 +396,7 @@ class Robot(AgentTool):
         # Use asyncio.run only if no loop is running, otherwise run in existing loop
         try:
             # Try to get the current event loop
-            current_loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # If we're already in an event loop, we need to run in a thread
             import concurrent.futures
 
@@ -679,7 +680,7 @@ class Robot(AgentTool):
         """Destructor to ensure cleanup."""
         try:
             self.cleanup()
-        except:
+        except Exception:
             pass  # Ignore errors in destructor
 
     async def get_status(self) -> Dict[str, Any]:

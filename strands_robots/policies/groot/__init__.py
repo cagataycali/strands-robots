@@ -17,6 +17,7 @@ import logging
 from typing import Any, Dict, List, Union
 
 import numpy as np
+
 from .. import Policy
 from .client import ExternalRobotInferenceClient
 from .data_config import BaseDataConfig, load_data_config

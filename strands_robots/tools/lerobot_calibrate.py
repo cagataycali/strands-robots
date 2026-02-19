@@ -21,13 +21,10 @@ Based on LeRobot's calibration system:
 
 import json
 import logging
-import os
 import shutil
-import sys
-import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 from strands import tool
 
@@ -476,7 +473,8 @@ def lerobot_calibrate(
                                 f"  - **ID:** {motor_data.get('id', 'N/A')}",
                                 f"  - **Drive Mode:** {motor_data.get('drive_mode', 'N/A')}",
                                 f"  - **Homing Offset:** {motor_data.get('homing_offset', 'N/A')}",
-                                f"  - **Range:** {motor_data.get('range_min', 'N/A')} to {motor_data.get('range_max', 'N/A')}",
+                                f"  - **Range:** {motor_data.get('range_min', 'N/A')}"
+                                f" to {motor_data.get('range_max', 'N/A')}",
                                 "",
                             ]
                         )
@@ -667,7 +665,8 @@ def lerobot_calibrate(
                     "status": "success",
                     "content": [
                         {
-                            "text": f"📍 **Calibration Path**\n`{calib_path}`\n\n{'✅ File exists' if exists else '❌ File does not exist'}"
+                            "text": f"📍 **Calibration Path**\n`{calib_path}`\n\n"
+                            f"{'✅ File exists' if exists else '❌ File does not exist'}"
                         }
                     ],
                     "path": str(calib_path),
@@ -679,7 +678,10 @@ def lerobot_calibrate(
                     "status": "success",
                     "content": [
                         {
-                            "text": f"📍 **LeRobot Calibration Paths**\n\n**Base:** `{manager.base_path}`\n**Teleoperators:** `{manager.teleop_path}`\n**Robots:** `{manager.robot_path}`"
+                            "text": f"📍 **LeRobot Calibration Paths**\n\n"
+                            f"**Base:** `{manager.base_path}`\n"
+                            f"**Teleoperators:** `{manager.teleop_path}`\n"
+                            f"**Robots:** `{manager.robot_path}`"
                         }
                     ],
                     "base_path": str(manager.base_path),
@@ -692,7 +694,8 @@ def lerobot_calibrate(
                 "status": "error",
                 "content": [
                     {
-                        "text": f"❌ **Unknown action:** `{action}`\n\nAvailable actions: list, view, search, backup, restore, delete, analyze, path"
+                        "text": f"❌ **Unknown action:** `{action}`\n\n"
+                        "Available actions: list, view, search, backup, restore, delete, analyze, path"
                     }
                 ],
             }

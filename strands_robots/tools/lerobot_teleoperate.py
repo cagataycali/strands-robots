@@ -9,17 +9,16 @@ This tool integrates teleoperation and recording functionality from lerobot, all
 - Manage multiple teleoperation sessions
 """
 
-import sys
-import os
 import json
-import time
+import logging
+import os
 import signal
 import subprocess
-import logging
+import time
 from pathlib import Path
-from typing import Any, Dict, Optional, List, Union
-import psutil
+from typing import Any, Dict, List, Optional
 
+import psutil
 from strands import tool
 
 # Configure logging
@@ -519,7 +518,7 @@ def lerobot_teleoperate(
                             proc.stdin.write("\n")  # Send another ENTER (for robot calibration)
                             proc.stdin.flush()
                             proc.stdin.close()  # Close stdin after sending responses
-                        except:
+                        except Exception:
                             pass  # Ignore errors if process has already finished
 
                     threading.Thread(target=auto_respond, daemon=True).start()
@@ -548,7 +547,12 @@ def lerobot_teleoperate(
                     "status": "success",
                     "content": [
                         {
-                            "text": f"🚀 **Teleoperation Session Started**\n📝 Session: `{session_name}`\n🆔 Process ID: {proc.pid}\n📁 Command: `{' '.join(cmd)}`\n📋 Log file: `{log_file}`\n🔄 Running in background"
+                            "text": f"🚀 **Teleoperation Session Started**\n"
+                            f"📝 Session: `{session_name}`\n"
+                            f"🆔 Process ID: {proc.pid}\n"
+                            f"📁 Command: `{' '.join(cmd)}`\n"
+                            f"📋 Log file: `{log_file}`\n"
+                            f"🔄 Running in background"
                         }
                     ],
                     "session_name": session_name,
@@ -565,7 +569,11 @@ def lerobot_teleoperate(
                     "status": "success" if result.returncode == 0 else "error",
                     "content": [
                         {
-                            "text": f"🖥️ **Foreground Execution Complete**\n↩️ Return code: {result.returncode}\n📁 Command: `{' '.join(cmd)}`\n\n📤 **Output:**\n```\n{result.stdout}\n```\n\n⚠️ **Errors:**\n```\n{result.stderr}\n```"
+                            "text": f"🖥️ **Foreground Execution Complete**\n"
+                            f"↩️ Return code: {result.returncode}\n"
+                            f"📁 Command: `{' '.join(cmd)}`\n\n"
+                            f"📤 **Output:**\n```\n{result.stdout}\n```\n\n"
+                            f"⚠️ **Errors:**\n```\n{result.stderr}\n```"
                         }
                     ],
                     "command": " ".join(cmd),

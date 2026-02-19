@@ -4,29 +4,25 @@ LeRobot-based camera tool for Strands agents.
 Leverages LeRobot's OpenCV and RealSense camera classes for professional camera management.
 """
 
-import os
-import sys
-import time
 import json
-import asyncio
-import numpy as np
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Union
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
-import base64
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from typing import Any, Dict, List, Union
 
+import numpy as np
 
 try:
     import cv2
+    from lerobot.cameras.camera import Camera
     from lerobot.cameras.opencv import OpenCVCamera
     from lerobot.cameras.opencv.configuration_opencv import (
-        OpenCVCameraConfig,
         ColorMode,
         Cv2Rotation,
+        OpenCVCameraConfig,
     )
-    from lerobot.cameras.camera import Camera
 
     # Try to import RealSense camera if available
     try:
@@ -341,9 +337,9 @@ def _list_camera_details(camera_type: str, camera_id: Union[int, str] = None) ->
             details.append("🎥 **OpenCV Camera System:**")
             details.append(f"   - Backend: {_get_opencv_backend_name()}")
             details.append(f"   - Version: {cv2.__version__}")
-            details.append(f"   - Available color modes: RGB, BGR")
-            details.append(f"   - Supported rotations: 0°, 90°, 180°, 270°")
-            details.append(f"   - Async reading: ✅ Supported")
+            details.append("   - Available color modes: RGB, BGR")
+            details.append("   - Supported rotations: 0°, 90°, 180°, 270°")
+            details.append("   - Async reading: ✅ Supported")
             details.append("")
 
             if camera_id is not None:
@@ -353,7 +349,7 @@ def _list_camera_details(camera_type: str, camera_id: Union[int, str] = None) ->
                     camera.connect(warmup=False)
 
                     details.append(f"📸 **Camera {camera_id} Details:**")
-                    details.append(f"   - Connection: ✅ Success")
+                    details.append("   - Connection: ✅ Success")
                     details.append(f"   - Actual FPS: {camera.fps}")
                     details.append(f"   - Resolution: {camera.width}x{camera.height}")
                     details.append(f"   - Color Mode: {camera.color_mode.value}")
@@ -366,16 +362,16 @@ def _list_camera_details(camera_type: str, camera_id: Union[int, str] = None) ->
 
         elif camera_type.lower() == "realsense" and REALSENSE_AVAILABLE:
             details.append("🎯 **RealSense Camera System:**")
-            details.append(f"   - SDK Available: ✅ Yes")
-            details.append(f"   - Depth Support: ✅ Yes")
-            details.append(f"   - Multiple streams: Color, Depth, Infrared")
-            details.append(f"   - Advanced features: Post-processing, alignment")
+            details.append("   - SDK Available: ✅ Yes")
+            details.append("   - Depth Support: ✅ Yes")
+            details.append("   - Multiple streams: Color, Depth, Infrared")
+            details.append("   - Advanced features: Post-processing, alignment")
 
         else:
             if not REALSENSE_AVAILABLE and camera_type.lower() == "realsense":
                 details.append("🎯 **RealSense Camera System:**")
-                details.append(f"   - SDK Available: ❌ Not installed")
-                details.append(f"   - Install with: `pip install pyrealsense2`")
+                details.append("   - SDK Available: ❌ Not installed")
+                details.append("   - Install with: `pip install pyrealsense2`")
             else:
                 details.append(f"❌ **Unknown camera type: {camera_type}**")
 
@@ -578,7 +574,7 @@ def _capture_batch_images(
         result_info.extend(
             [
                 "",
-                f"📊 **Summary:**",
+                "📊 **Summary:**",
                 f"   - Success: {successful_captures}/{len(camera_ids)} cameras",
                 f"   - Total time: {total_time:.3f}s",
                 f"   - Save path: `{save_path}`",
@@ -822,7 +818,7 @@ def _test_camera_performance(
         min_sync_time = np.min(capture_times)
         max_sync_time = np.max(capture_times)
 
-        test_results.append(f"📷 **Sync Capture (10 frames)**:")
+        test_results.append("📷 **Sync Capture (10 frames)**:")
         test_results.append(f"   - Average: {avg_sync_time:.3f}s")
         test_results.append(f"   - Min: {min_sync_time:.3f}s")
         test_results.append(f"   - Max: {max_sync_time:.3f}s")
@@ -841,7 +837,7 @@ def _test_camera_performance(
             min_async_time = np.min(async_times)
             max_async_time = np.max(async_times)
 
-            test_results.append(f"⚡ **Async Capture (10 frames)**:")
+            test_results.append("⚡ **Async Capture (10 frames)**:")
             test_results.append(f"   - Average: {avg_async_time:.3f}s")
             test_results.append(f"   - Min: {min_async_time:.3f}s")
             test_results.append(f"   - Max: {max_async_time:.3f}s")
@@ -849,7 +845,7 @@ def _test_camera_performance(
             test_results.append(f"   - Speedup: {avg_sync_time/avg_async_time:.2f}x")
 
         # Frame properties test
-        test_results.append(f"📊 **Frame Properties**:")
+        test_results.append("📊 **Frame Properties**:")
         test_results.append(f"   - Resolution: {frame.shape[1]}x{frame.shape[0]}")
         test_results.append(f"   - Channels: {frame.shape[2]}")
         test_results.append(f"   - Data type: {frame.dtype}")
@@ -857,23 +853,26 @@ def _test_camera_performance(
 
         # Camera properties
         if hasattr(camera, "fps"):
-            test_results.append(f"⚙️  **Camera Configuration**:")
+            test_results.append("⚙️  **Camera Configuration**:")
             test_results.append(f"   - Configured FPS: {camera.fps}")
             test_results.append(f"   - Resolution: {camera.width}x{camera.height}")
             test_results.append(f"   - Color mode: {camera.color_mode.value}")
 
         camera.disconnect()
 
-        test_results.append(f"\n🎯 **Performance Summary**:")
+        test_results.append("\n🎯 **Performance Summary**:")
         test_results.append(f"   - Connection: {'✅ Fast' if connect_time < 1.0 else '⚠️ Slow'} ({connect_time:.3f}s)")
         test_results.append(
             f"   - Sync capture: {'✅ Good' if avg_sync_time < 0.1 else '⚠️ Slow'} ({avg_sync_time:.3f}s)"
         )
         if async_mode:
             test_results.append(
-                f"   - Async capture: {'✅ Better' if avg_async_time < avg_sync_time else '❌ Worse'} ({avg_async_time:.3f}s)"
+                f"   - Async capture: {'✅ Better' if avg_async_time < avg_sync_time else '❌ Worse'}"
+                f" ({avg_async_time:.3f}s)"
             )
-        test_results.append(f"   - Frame rate: {'✅ Stable' if max_sync_time - min_sync_time < 0.05 else '⚠️ Variable'}")
+        test_results.append(
+            f"   - Frame rate: {'✅ Stable' if max_sync_time - min_sync_time < 0.05 else '⚠️ Variable'}"
+        )
 
         return {"status": "success", "content": [{"text": "\n".join(test_results)}]}
 
@@ -929,7 +928,9 @@ def _configure_camera_settings(
         # Save configuration if requested
         if save_config:
             os.makedirs(save_path, exist_ok=True)
-            config_filename = f"camera_config_{camera_type}_{str(camera_id).replace('/', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            cam_id_safe = str(camera_id).replace("/", "_")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            config_filename = f"camera_config_{camera_type}_{cam_id_safe}_{timestamp}.json"
             config_path = os.path.join(save_path, config_filename)
 
             with open(config_path, "w") as f:
@@ -938,9 +939,9 @@ def _configure_camera_settings(
             config_info.extend(
                 [
                     "",
-                    f"💾 **Configuration Saved**:",
+                    "💾 **Configuration Saved**:",
                     f"   - File: `{config_path}`",
-                    f"   - Format: JSON",
+                    "   - Format: JSON",
                 ]
             )
 
