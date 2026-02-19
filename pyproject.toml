@@ -42,7 +42,7 @@ dependencies = [
 
 [project.optional-dependencies]
 groot = [
-    "gr00t",
+    "gr00t @ git+https://github.com/NVIDIA/Isaac-GR00T.git",
 ]
 dev = [
     "pytest>=6.0",
