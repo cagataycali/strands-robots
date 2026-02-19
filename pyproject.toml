@@ -41,6 +41,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+groot = [
+    "gr00t",
+]
 dev = [
     "pytest>=6.0",
     "pytest-cov",
