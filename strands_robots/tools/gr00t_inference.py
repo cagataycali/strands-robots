@@ -6,10 +6,11 @@ Manages GR00T policy inference services running in Docker containers.
 Uses Isaac-GR00T's native inference service for proper ZMQ/HTTP communication.
 """
 
-import subprocess
 import socket
+import subprocess
 import time
-from typing import Dict, Any
+from typing import Any, Dict
+
 from strands import tool
 
 
@@ -184,7 +185,7 @@ def _is_service_running(port: int) -> bool:
         result = sock.connect_ex(("localhost", port))
         sock.close()
         return result == 0
-    except:
+    except Exception:
         return False
 
 
@@ -357,7 +358,7 @@ def _start_service(
             cmd.extend(["--api-token", api_token])
 
         # Start service
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
 
         # Wait for service to start
         protocol = "HTTP" if http_server else "ZMQ"
@@ -413,5 +414,6 @@ if __name__ == "__main__":
     print()
     print("  # Start HTTP + TensorRT")
     print(
-        "  gr00t_inference(action='start', checkpoint_path='/data/checkpoints/model', port=8000, http_server=True, use_tensorrt=True)"
+        "  gr00t_inference(action='start', checkpoint_path='/data/checkpoints/model',"
+        " port=8000, http_server=True, use_tensorrt=True)"
     )

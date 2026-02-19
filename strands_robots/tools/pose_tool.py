@@ -13,16 +13,13 @@ This tool provides comprehensive pose management for robotic arms, including:
 import json
 import logging
 import time
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union, Tuple
-from dataclasses import dataclass, asdict
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List, Optional, Tuple
 
-from strands import tool
 import serial
 import serial.tools.list_ports
-
+from strands import tool
 
 logger = logging.getLogger(__name__)
 

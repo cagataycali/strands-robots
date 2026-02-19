@@ -8,7 +8,7 @@ allowing the Robot class to work with any VLA provider without hardcoding.
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 

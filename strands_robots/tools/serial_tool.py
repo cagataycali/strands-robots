@@ -1,8 +1,9 @@
-from strands import tool
+import time
+from typing import Any, Dict, List, Optional, Union
+
 import serial
 import serial.tools.list_ports
-import time
-from typing import Dict, Any, List, Optional, Union
+from strands import tool
 
 
 @tool
@@ -237,7 +238,9 @@ def serial_tool(
                 "status": "error",
                 "content": [
                     {
-                        "text": f"❌ Unknown action: {action}\nAvailable: list_ports, send, read, send_read, feetech_position, feetech_velocity, feetech_ping, monitor"
+                        "text": f"❌ Unknown action: {action}\n"
+                        "Available: list_ports, send, read, send_read,"
+                        " feetech_position, feetech_velocity, feetech_ping, monitor"
                     }
                 ],
             }
