@@ -155,27 +155,16 @@ agent("Use my_arm to pick up the red block using GR00T policy on port 8000")
 
 ## Installation
 
-### Base install (lightweight, embedded GR00T client)
-
 ```bash
 pip install strands-robots
 ```
 
-### With full Isaac-GR00T integration
-
-```bash
-pip install strands-robots[groot]
-```
-
-> **Note:** The `[groot]` extra installs [Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T) which requires Python 3.10 and has heavy dependencies (PyTorch, flash-attn, deepspeed, etc.). The base install includes an embedded lightweight client that is fully compatible with GR00T inference servers — no need for the full package unless you need native Isaac-GR00T types for training or advanced data pipeline integration.
-
-### From source
+From source:
 
 ```bash
 git clone https://github.com/cagataycali/strands-robots
 cd strands-robots
-pip install -e .          # Base install
-pip install -e ".[groot]" # With Isaac-GR00T
+pip install -e .
 ```
 
 <details>
@@ -201,36 +190,6 @@ jetson-containers run $(autotag isaac-gr00t) &
 See [Jetson Deployment Guide](https://github.com/NVIDIA/Isaac-GR00T/blob/main/deployment_scripts/README.md) for TensorRT optimization.
 
 </details>
-
-## GR00T Integration
-
-The GR00T policy layer uses a **try-native-first, fallback-to-embedded** pattern:
-
-```
-┌─────────────────────────────────────────────┐
-│  strands_robots.policies.groot              │
-│                                             │
-│  ┌─────────────────────────────────────┐    │
-│  │ try: import gr00t  ← native types   │    │
-│  │ except: use embedded fallback       │    │
-│  └─────────────────────────────────────┘    │
-│                                             │
-│  data_config.py                             │
-│    ModalityConfig  → gr00t.data.types       │
-│                    → or embedded dataclass   │
-│                                             │
-│  client.py                                  │
-│    InferenceClient → gr00t.policy.PolicyClient│
-│                    → or embedded ZMQ client  │
-└─────────────────────────────────────────────┘
-```
-
-| Install | ModalityConfig | Inference Client | Use Case |
-|---------|---------------|-----------------|----------|
-| `pip install strands-robots` | Embedded (lightweight) | Embedded ZMQ client | Robot control & inference |
-| `pip install strands-robots[groot]` | `gr00t.data.types` (native) | `gr00t.policy.PolicyClient` (native) | + Training, data pipelines |
-
-Both paths are **wire-compatible** — the same GR00T inference server works with either.
 
 ## Robot Control Flow
 
@@ -471,8 +430,8 @@ strands-robots/
 │   │   ├── __init__.py          # Policy ABC + factory
 │   │   └── groot/
 │   │       ├── __init__.py      # Gr00tPolicy implementation
-│   │       ├── client.py        # ZMQ inference client (native or embedded)
-│   │       └── data_config.py   # Embodiment configs (native or embedded)
+│   │       ├── client.py        # ZMQ inference client
+│   │       └── data_config.py   # Robot embodiment configurations
 │   └── tools/
 │       ├── gr00t_inference.py   # Docker service manager
 │       ├── lerobot_camera.py    # Camera operations

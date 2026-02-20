@@ -41,9 +41,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-groot = [
-    "gr00t @ git+https://github.com/NVIDIA/Isaac-GR00T.git",
-]
 dev = [
     "pytest>=6.0",
     "pytest-cov",
@@ -58,9 +55,6 @@ Homepage = "https://github.com/cagataycali/strands-robots"
 Documentation = "https://github.com/cagataycali/strands-robots#readme"
 Repository = "https://github.com/cagataycali/strands-robots.git"
 Issues = "https://github.com/cagataycali/strands-robots/issues"
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.version]
 source = "vcs"
