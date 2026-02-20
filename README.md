@@ -159,7 +159,7 @@ agent("Use my_arm to pick up the red block using GR00T policy on port 8000")
 pip install strands-robots
 ```
 
-Or from source:
+From source:
 
 ```bash
 git clone https://github.com/cagataycali/strands-robots
@@ -168,7 +168,7 @@ pip install -e .
 ```
 
 <details>
-<summary><b>🐳 Jetson Container Setup (Required for GR00T)</b></summary>
+<summary><b>🐳 Jetson Container Setup (Required for GR00T Inference)</b></summary>
 
 GR00T inference requires the Isaac-GR00T Docker container on Jetson platforms:
 
@@ -305,19 +305,6 @@ LeRobot-based camera management with OpenCV and RealSense support.
 | `preview` | `camera_id`, `preview_duration` | Live preview | `"Preview camera 0"` |
 | `test` | `camera_id` | Performance test | `"Test camera speed"` |
 
-**Natural Language Examples:**
-
-```python
-# Discover available cameras
-agent("Find all connected cameras")
-
-# Capture from multiple cameras
-agent("Capture images from front and wrist cameras")
-
-# Record demonstration
-agent("Record 30 seconds of video from the front camera")
-```
-
 ---
 
 ### Serial Tool
@@ -344,21 +331,6 @@ Record demonstrations for imitation learning with LeRobot.
 | `stop` | `session_name` | Stop session | `"Stop recording"` |
 | `list` | - | List active sessions | `"List teleop sessions"` |
 | `replay` | `dataset_repo_id`, `replay_episode` | Replay episode | `"Replay episode 5"` |
-
-**Recording Demonstrations:**
-
-```python
-agent.tool.lerobot_teleoperate(
-    action="start",
-    robot_type="so101_follower",
-    robot_port="/dev/ttyACM0",
-    teleop_type="so101_leader",
-    teleop_port="/dev/ttyACM1",
-    dataset_repo_id="my_user/cube_picking",
-    dataset_single_task="Pick up the red cube",
-    dataset_num_episodes=50
-)
-```
 
 ---
 
@@ -435,7 +407,7 @@ classDiagram
 ```python
 from strands_robots import create_policy
 
-# GR00T policy (requires container)
+# GR00T policy (requires inference server)
 policy = create_policy(
     provider="groot",
     data_config="so100_dualcam",
@@ -452,14 +424,14 @@ policy = create_policy(provider="mock")
 ```
 strands-robots/
 ├── strands_robots/
-│   ├── __init__.py           # Package exports
-│   ├── robot.py              # Universal Robot class (AgentTool)
+│   ├── __init__.py              # Package exports
+│   ├── robot.py                 # Universal Robot class (AgentTool)
 │   ├── policies/
-│   │   ├── __init__.py       # Policy ABC + factory
+│   │   ├── __init__.py          # Policy ABC + factory
 │   │   └── groot/
-│   │       ├── __init__.py   # Gr00tPolicy implementation
-│   │       ├── client.py     # ZMQ inference client
-│   │       └── data_config.py # 6 embodiment configurations
+│   │       ├── __init__.py      # Gr00tPolicy implementation
+│   │       ├── client.py        # ZMQ inference client
+│   │       └── data_config.py   # Robot embodiment configurations
 │   └── tools/
 │       ├── gr00t_inference.py   # Docker service manager
 │       ├── lerobot_camera.py    # Camera operations
@@ -467,8 +439,8 @@ strands-robots/
 │       ├── lerobot_teleoperate.py # Recording/replay
 │       ├── pose_tool.py         # Pose management
 │       └── serial_tool.py       # Serial communication
-├── test.py                   # Integration example
-└── pyproject.toml            # Package configuration
+├── test.py                      # Integration example
+└── pyproject.toml               # Package configuration
 ```
 
 ## Example: Complete Workflow
