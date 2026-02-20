@@ -59,6 +59,9 @@ Documentation = "https://github.com/cagataycali/strands-robots#readme"
 Repository = "https://github.com/cagataycali/strands-robots.git"
 Issues = "https://github.com/cagataycali/strands-robots/issues"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.version]
 source = "vcs"
 
